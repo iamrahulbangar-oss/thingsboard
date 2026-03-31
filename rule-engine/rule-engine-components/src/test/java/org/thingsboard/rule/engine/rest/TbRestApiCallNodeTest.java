@@ -27,11 +27,14 @@ import org.apache.http.protocol.HttpRequestHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.thingsboard.common.util.DirectListeningExecutor;
 import org.thingsboard.common.util.JacksonUtil;
 import org.thingsboard.rule.engine.AbstractRuleNodeUpgradeTest;
 import org.thingsboard.rule.engine.api.TbContext;
@@ -43,6 +46,7 @@ import org.thingsboard.server.common.data.id.EntityId;
 import org.thingsboard.server.common.data.id.RuleChainId;
 import org.thingsboard.server.common.data.id.RuleNodeId;
 import org.thingsboard.server.common.data.msg.TbMsgType;
+import org.thingsboard.server.common.data.msg.TbNodeConnectionType;
 import org.thingsboard.server.common.msg.TbMsg;
 import org.thingsboard.server.common.msg.TbMsgDataType;
 import org.thingsboard.server.common.msg.TbMsgMetaData;
@@ -53,9 +57,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
@@ -210,6 +219,85 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
 
         assertNotSame(metaData, metadataCaptor.getValue());
         assertEquals(TbMsg.EMPTY_JSON_OBJECT, dataCaptor.getValue());
+    }
+
+    @Test
+    public void givenForceAckTrue_whenOnMsgAndServerReturns200_thenAckedImmediatelyAndEnqueuedForTellNext() throws IOException {
+        final String path = "/path/to/get";
+        setupServer("*", new HttpRequestHandler() {
+            @Override
+            public void handle(HttpRequest request, HttpResponse response, HttpContext context)
+                    throws HttpException, IOException {
+                response.setStatusCode(200);
+            }
+        });
+
+        TbMsg transformedMsg = TbMsg.newMsg()
+                .type(TbMsgType.POST_TELEMETRY_REQUEST)
+                .originator(originator)
+                .copyMetaData(metaData)
+                .dataType(TbMsgDataType.JSON)
+                .data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId)
+                .ruleNodeId(ruleNodeId)
+                .build();
+
+        given(ctx.isExternalNodeForceAck()).willReturn(true);
+        given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
+        given(ctx.transformMsg(any(), any(), any())).willReturn(transformedMsg);
+
+        TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
+        config.setRequestMethod("GET");
+        config.setIgnoreRequestBody(true);
+        config.setRestEndpointUrlPattern(String.format("http://localhost:%d%s", server.getLocalPort(), path));
+        initWithConfig(config);
+
+        TbMsg msg = TbMsg.newMsg()
+                .type(TbMsgType.POST_TELEMETRY_REQUEST)
+                .originator(originator)
+                .copyMetaData(metaData)
+                .dataType(TbMsgDataType.JSON)
+                .data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId)
+                .ruleNodeId(ruleNodeId)
+                .build();
+        restNode.onMsg(ctx, msg);
+
+        verify(ctx).ack(msg);
+        verify(ctx, timeout(5_000)).enqueueForTellNext(any(), eq(TbNodeConnectionType.SUCCESS));
+        verify(ctx, never()).tellSuccess(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void givenMaxParallelRequestsCountAndBadUrl_whenOnMsg_thenSemaphoreIsReleasedAndFailureReported(boolean forceAck) throws IOException {
+        given(ctx.isExternalNodeForceAck()).willReturn(forceAck);
+        if (forceAck) {
+            given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
+        }
+
+        TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
+        config.setMaxParallelRequestsCount(1);
+        config.setRestEndpointUrlPattern("");
+        initWithConfig(config);
+
+        TbMsg msg = TbMsg.newMsg()
+                .type(TbMsgType.POST_TELEMETRY_REQUEST)
+                .originator(originator)
+                .copyMetaData(metaData)
+                .dataType(TbMsgDataType.JSON)
+                .data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId)
+                .ruleNodeId(ruleNodeId)
+                .build();
+        restNode.onMsg(ctx, msg);
+
+        assertThat(restNode.httpClient.getSemaphore().availablePermits()).isEqualTo(1);
+        if (forceAck) {
+            verify(ctx).enqueueForTellFailure(any(), any(Throwable.class));
+        } else {
+            verify(ctx).tellFailure(any(), any());
+        }
     }
 
     private static Stream<Arguments> givenFromVersionAndConfig_whenUpgrade_thenVerifyHasChangesAndConfig() {

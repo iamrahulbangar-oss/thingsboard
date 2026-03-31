@@ -65,19 +65,18 @@ public class TbRestApiCallNode extends TbAbstractExternalNode {
     @Override
     public void onMsg(TbContext ctx, TbMsg msg) {
         var tbMsg = ackIfNeeded(ctx, msg);
+        Runnable process = () -> httpClient.processMessage(ctx, tbMsg,
+                m -> tellSuccess(ctx, m),
+                (m, t) -> tellFailure(ctx, m, t));
         if (forceAck) {
             DonAsynchron.withCallback(ctx.getExternalCallExecutor().executeAsync(() -> {
-                        httpClient.processMessage(ctx, tbMsg,
-                                m -> tellSuccess(ctx, m),
-                                (m, t) -> tellFailure(ctx, m, t));
+                        process.run();
                         return null;
                     }),
                     r -> {},
                     t -> tellFailure(ctx, tbMsg, t));
         } else {
-            httpClient.processMessage(ctx, tbMsg,
-                    m -> tellSuccess(ctx, m),
-                    (m, t) -> tellFailure(ctx, m, t));
+            process.run();
         }
     }
 
