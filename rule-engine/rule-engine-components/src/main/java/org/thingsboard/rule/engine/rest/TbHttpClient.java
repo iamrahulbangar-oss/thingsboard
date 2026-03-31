@@ -212,10 +212,14 @@ public class TbHttpClient {
     public void processMessage(TbContext ctx, TbMsg msg,
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
+        boolean semaphoreAcquired = false;
         try {
-            if (semaphore != null && !semaphore.tryAcquire(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)) {
-                onFailure.accept(msg, new RuntimeException("Timeout during waiting for reply!"));
-                return;
+            if (semaphore != null) {
+                if (!semaphore.tryAcquire(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)) {
+                    onFailure.accept(msg, new RuntimeException("Timeout during waiting for reply!"));
+                    return;
+                }
+                semaphoreAcquired = true;
             }
 
             String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), msg);
@@ -233,6 +237,7 @@ public class TbHttpClient {
                 request.body(BodyInserters.fromValue(getData(msg, config.isParseToPlainText())));
             }
 
+            semaphoreAcquired = false; // subscribe callbacks own the release now
             request
                     .retrieve()
                     .toEntity(String.class)
@@ -253,8 +258,11 @@ public class TbHttpClient {
 
                         onFailure.accept(processException(msg, throwable), processThrowable(throwable));
                     });
-        } catch (InterruptedException e) {
-            log.warn("Timeout during waiting for reply!", e);
+        } catch (Exception e) {
+            if (semaphoreAcquired) {
+                semaphore.release();
+            }
+            onFailure.accept(processException(msg, e), e);
         }
     }
 

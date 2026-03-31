@@ -17,6 +17,7 @@ package org.thingsboard.rule.engine.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.thingsboard.common.util.DonAsynchron;
 import org.thingsboard.rule.engine.api.RuleNode;
 import org.thingsboard.rule.engine.api.TbContext;
 import org.thingsboard.rule.engine.api.TbNodeConfiguration;
@@ -64,9 +65,20 @@ public class TbRestApiCallNode extends TbAbstractExternalNode {
     @Override
     public void onMsg(TbContext ctx, TbMsg msg) {
         var tbMsg = ackIfNeeded(ctx, msg);
-        httpClient.processMessage(ctx, tbMsg,
-                m -> tellSuccess(ctx, m),
-                (m, t) -> tellFailure(ctx, m, t));
+        if (forceAck) {
+            DonAsynchron.withCallback(ctx.getExternalCallExecutor().executeAsync(() -> {
+                        httpClient.processMessage(ctx, tbMsg,
+                                m -> tellSuccess(ctx, m),
+                                (m, t) -> tellFailure(ctx, m, t));
+                        return null;
+                    }),
+                    r -> {},
+                    t -> tellFailure(ctx, tbMsg, t));
+        } else {
+            httpClient.processMessage(ctx, tbMsg,
+                    m -> tellSuccess(ctx, m),
+                    (m, t) -> tellFailure(ctx, m, t));
+        }
     }
 
     @Override
