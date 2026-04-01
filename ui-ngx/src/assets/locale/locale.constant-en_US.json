@@ -3852,7 +3852,22 @@
         "open-installed-entity": "Open installed entity",
         "view-item-details": "View item details",
         "open-item-type-details": "Open {{type}} details",
-        "back-to-marketplace": "Back to Marketplace"
+        "back-to-marketplace": "Back to Marketplace",
+        "device-install-connection": "Connection: {{type}}",
+        "device-install-entity-error": "Failed to create {{name}}: {{error}}",
+        "device-install-expand-image": "Click to expand",
+        "device-install-select-connectivity": "Select your connection type:",
+        "device-install-step-error": "Failed",
+        "device-install-step-pending": "Pending",
+        "device-install-step-running": "Creating...",
+        "device-install-step-success": "Created",
+        "device-install-step-type-DASHBOARD": "Dashboard",
+        "device-install-step-type-DEVICE": "Device",
+        "device-install-step-type-DEVICE_PROFILE": "Device Profile",
+        "device-install-step-type-RULE_CHAIN": "Rule Chain",
+        "device-install-title": "Install \"{{name}}\"",
+        "device-install-complete-title": "Install \"{{name}}\" — Complete",
+        "device-installing-title": "Installing \"{{name}}\""
     },
     "item-data": {
         "widget-type-timeseries": "Timeseries",

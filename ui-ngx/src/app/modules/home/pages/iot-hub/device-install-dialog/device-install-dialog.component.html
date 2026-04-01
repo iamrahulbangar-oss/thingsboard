@@ -34,7 +34,7 @@
     @switch (currentView) {
       @case ('connectivity') {
         <div class="tb-device-install-connectivity">
-          <p>{{ 'iot-hub.device-install.select-connectivity' | translate }}</p>
+          <p>{{ 'iot-hub.device-install-select-connectivity' | translate }}</p>
           <div class="tb-connectivity-options">
             @for (ct of availableConnectivityTypes; track ct) {
               <button mat-stroked-button
@@ -49,8 +49,8 @@
       }
       @case ('instruction') {
         <div class="tb-device-install-instruction">
-          <tb-markdown [markdownText]="currentMarkdown"
-                       [style]="'doc'">
+          <tb-markdown [data]="currentMarkdown"
+                       [usePlainMarkdown]="true">
           </tb-markdown>
         </div>
       }
@@ -74,7 +74,7 @@
                         }
                       </mat-select>
                       @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                        <mat-error>{{ field.label + ' is required' }}</mat-error>
                       }
                     </mat-form-field>
                   }
@@ -88,7 +88,7 @@
                         <mat-icon>{{ passwordVisible[field.key] ? 'visibility_off' : 'visibility' }}</mat-icon>
                       </button>
                       @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                        <mat-error>{{ field.label + ' is required' }}</mat-error>
                       }
                       @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
                         <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
@@ -100,7 +100,7 @@
                       <mat-label>{{ field.label }}</mat-label>
                       <input matInput type="number" [formControlName]="field.key">
                       @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                        <mat-error>{{ field.label + ' is required' }}</mat-error>
                       }
                       @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
                         <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
@@ -112,7 +112,7 @@
                       <mat-label>{{ field.label }}</mat-label>
                       <input matInput [formControlName]="field.key">
                       @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                        <mat-error>{{ field.label + ' is required' }}</mat-error>
                       }
                       @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
                         <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
@@ -124,7 +124,7 @@
                   <div class="tb-form-field-help">{{ field.helpText }}</div>
                 }
                 @if (field.helpImage) {
-                  <img class="tb-form-field-help-image" [src]="resolveImageUrl(field.helpImage)" [alt]="field.label">
+                  <img class="tb-form-field-help-image" [src]="field.helpImage" [alt]="field.label">
                 }
               }
             </form>
@@ -171,7 +171,7 @@
                          [style]="'doc'">
             </tb-markdown>
           } @else {
-            <p class="tb-done-message">{{ 'iot-hub.device-install.success' | translate:{ name: packageInfo?.name } }}</p>
+            <p class="tb-done-message">{{ 'iot-hub.install-success-desc' | translate:{ name: packageInfo?.name } }}</p>
           }
         </div>
       }

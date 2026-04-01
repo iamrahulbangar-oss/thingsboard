@@ -25,7 +25,6 @@ import { DeviceService } from '@core/http/device.service';
 import { DashboardService } from '@core/http/dashboard.service';
 import { RuleChainService } from '@core/http/rule-chain.service';
 import {
-  ConnectivityType,
   connectivityTypeTranslations,
   DeviceInstallStep,
   DevicePackageInfo,
@@ -102,6 +101,9 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       );
       if (this.availableConnectivityTypes.length === 1) {
         this.selectedConnectivity = this.availableConnectivityTypes[0];
+        this.steps = this.packageInfo.installSteps[this.selectedConnectivity] || [];
+        this.currentStepIndex = 0;
+        this.advanceToCurrentStep();
       }
     } catch (e) {
       console.error('Failed to parse device package ZIP', e);
@@ -201,10 +203,6 @@ export class TbDeviceInstallDialogComponent implements OnInit {
   retryEntitySteps(): void {
     this.progressError = null;
     this.runEntitySteps();
-  }
-
-  resolveImageUrl(path: string): string {
-    return this.data.iotHubApiService.resolveResourceUrl(path);
   }
 
   getPatternErrorMessage(field: FormFieldDefinition): string {
