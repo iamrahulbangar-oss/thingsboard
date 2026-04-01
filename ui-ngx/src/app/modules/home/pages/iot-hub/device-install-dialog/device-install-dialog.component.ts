@@ -14,9 +14,10 @@
 /// limitations under the License.
 ///
 
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnInit, ViewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { UntypedFormControl, UntypedFormGroup, Validators } from '@angular/forms';
+import { MatStepper } from '@angular/material/stepper';
 import { firstValueFrom } from 'rxjs';
 import { PageLink } from '@shared/models/page/page-link';
 import { MpItemVersionView } from '@shared/models/iot-hub/iot-hub-version.models';
@@ -38,13 +39,30 @@ import {
   stepTypeAliasMap
 } from '@shared/models/iot-hub/device-package.models';
 
-export type DeviceInstallView = 'connectivity' | 'instruction' | 'form' | 'progress' | 'done';
-
 export interface DeviceInstallDialogData {
   item: MpItemVersionView;
   zipData: ArrayBuffer;
   iotHubApiService: IotHubApiService;
 }
+
+export type WizardStepType = 'instruction' | 'form' | 'progress';
+
+export interface WizardStep {
+  type: WizardStepType;
+  label: string;
+  rawSteps: DeviceInstallStep[];
+  // Instruction
+  markdown?: string;
+  // Form
+  formFields?: FormFieldDefinition[];
+  formGroup?: UntypedFormGroup;
+  // Progress
+  entitySteps?: EntityStepProgress[];
+  progressError?: string;
+  progressDone?: boolean;
+}
+
+const ENTITY_STEP_MIN_DELAY = 2000;
 
 @Component({
   selector: 'tb-device-install-dialog',
@@ -54,28 +72,27 @@ export interface DeviceInstallDialogData {
 })
 export class TbDeviceInstallDialogComponent implements OnInit {
 
+  @ViewChild('installStepper', {static: false}) stepper: MatStepper;
+
   loading = true;
   packageInfo: DevicePackageInfo;
   zipFiles = new Map<string, string>();
 
+  // Connectivity
+  showConnectivitySelector = false;
   availableConnectivityTypes: string[] = [];
   selectedConnectivity: string | null = null;
+  connectivityLabels = connectivityTypeTranslations;
 
-  currentView: DeviceInstallView = 'connectivity';
-  steps: DeviceInstallStep[] = [];
-  currentStepIndex = 0;
-
-  currentMarkdown = '';
-  currentFormFields: FormFieldDefinition[] = [];
-  currentFormGroup: UntypedFormGroup | null = null;
+  // Wizard
+  wizardSteps: WizardStep[] = [];
+  wizardStarted = false;
   passwordVisible: Record<string, boolean> = {};
 
+  // Variable resolution state
   formValues: Record<string, any> = {};
   entityOutputs = new Map<string, EntityStepOutput>();
   positionalOutputs = new Map<number, EntityStepOutput>();
-
-  entitySteps: EntityStepProgress[] = [];
-  progressError: string | null = null;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: DeviceInstallDialogData,
@@ -102,9 +119,10 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       );
       if (this.availableConnectivityTypes.length === 1) {
         this.selectedConnectivity = this.availableConnectivityTypes[0];
-        this.steps = this.packageInfo.installSteps[this.selectedConnectivity] || [];
-        this.currentStepIndex = 0;
-        this.advanceToCurrentStep();
+        this.showConnectivitySelector = false;
+        this.startWizard();
+      } else {
+        this.showConnectivitySelector = true;
       }
     } catch (e) {
       console.error('Failed to parse device package ZIP', e);
@@ -112,85 +130,50 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     this.loading = false;
   }
 
-  getConnectivityLabel(ct: string): string {
-    return connectivityTypeTranslations.get(ct) || ct;
-  }
+  // --- Connectivity ---
 
   selectConnectivity(ct: string): void {
     this.selectedConnectivity = ct;
   }
 
-  next(): void {
-    if (this.currentView === 'connectivity') {
-      if (!this.selectedConnectivity) {
-        return;
-      }
-      this.steps = this.packageInfo.installSteps[this.selectedConnectivity] || [];
-      this.currentStepIndex = 0;
-      this.formValues = {};
-      this.entityOutputs.clear();
-      this.positionalOutputs.clear();
-      this.advanceToCurrentStep();
+  confirmConnectivity(): void {
+    if (!this.selectedConnectivity) {
       return;
     }
+    this.startWizard();
+  }
 
-    if (this.currentView === 'form') {
-      if (this.currentFormGroup && this.currentFormGroup.invalid) {
-        this.currentFormGroup.markAllAsTouched();
+  // --- Wizard ---
+
+  get isLastWizardStep(): boolean {
+    return this.stepper && this.stepper.selectedIndex === this.wizardSteps.length - 1;
+  }
+
+  get currentWizardStep(): WizardStep | null {
+    if (!this.stepper || !this.wizardSteps.length) {
+      return null;
+    }
+    return this.wizardSteps[this.stepper.selectedIndex] ?? null;
+  }
+
+  nextStep(): void {
+    const step = this.currentWizardStep;
+    if (!step) {
+      return;
+    }
+    if (step.type === 'form') {
+      if (step.formGroup?.invalid) {
+        step.formGroup.markAllAsTouched();
         return;
       }
-      if (this.currentFormGroup) {
-        Object.assign(this.formValues, this.currentFormGroup.value);
-      }
+      Object.assign(this.formValues, step.formGroup.getRawValue());
     }
-
-    if (this.currentView === 'instruction' && this.isLastStep()) {
+    if (this.isLastWizardStep) {
       this.done();
       return;
     }
-
-    this.currentStepIndex++;
-    this.advanceToCurrentStep();
-  }
-
-  advanceToCurrentStep(): void {
-    if (this.currentStepIndex >= this.steps.length) {
-      this.currentView = 'done';
-      this.currentMarkdown = '';
-      return;
-    }
-
-    const step = this.steps[this.currentStepIndex];
-
-    switch (step.type) {
-      case InstallStepType.SHOW_INSTRUCTION: {
-        this.currentView = 'instruction';
-        const raw = this.zipFiles.get(step.file) || '';
-        this.currentMarkdown = this.resolveVariables(raw);
-        break;
-      }
-      case InstallStepType.SHOW_FORM: {
-        this.currentView = 'form';
-        const formJson = this.zipFiles.get(step.file) || '[]';
-        this.currentFormFields = JSON.parse(formJson) as FormFieldDefinition[];
-        this.buildFormGroup();
-        break;
-      }
-      default: {
-        if (ENTITY_STEP_TYPES.has(step.type)) {
-          this.collectAndRunEntitySteps();
-        } else {
-          // Skip unsupported step types (CONVERTER, INTEGRATION)
-          this.currentStepIndex++;
-          this.advanceToCurrentStep();
-        }
-        break;
-      }
-    }
-  }
-
-  isLastStep(): boolean {
-    return this.currentStepIndex >= this.steps.length - 1;
+    this.stepper.next();
+    this.onStepActivated();
   }
 
   done(): void {
@@ -201,17 +184,16 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     this.dialogRef.close(false);
   }
 
-  retryEntitySteps(): void {
-    this.progressError = null;
-    this.runEntitySteps();
+  retryEntitySteps(step: WizardStep): void {
+    step.progressError = null;
+    this.runEntitySteps(step);
   }
 
   getPatternErrorMessage(field: FormFieldDefinition): string {
-    if (field.validators?.length > 0) {
-      return field.validators[0].message || 'Invalid format';
-    }
-    return 'Invalid format';
+    return field.validators?.[0]?.message || 'Invalid format';
   }
+
+  // --- Variable Resolution ---
 
   resolveVariables(content: string): string {
     return content.replace(/\$\{([^}]+)\}/g, (_match, key) => {
@@ -224,13 +206,13 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         const prop = key.substring(dotIdx + 1);
         const output = this.entityOutputs.get(alias);
         if (output && prop in output) {
-          return String(output[prop]);
+          return String((output as any)[prop]);
         }
         const m = alias.match(/^step(\d+)$/);
         if (m) {
           const pos = this.positionalOutputs.get(parseInt(m[1], 10));
           if (pos && prop in pos) {
-            return String(pos[prop]);
+            return String((pos as any)[prop]);
           }
         }
       }
@@ -238,10 +220,70 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     });
   }
 
-  private buildFormGroup(): void {
-    const controls: Record<string, UntypedFormControl> = {};
+  // --- Private ---
+
+  private startWizard(): void {
+    this.formValues = {};
+    this.entityOutputs.clear();
+    this.positionalOutputs.clear();
     this.passwordVisible = {};
-    for (const field of this.currentFormFields) {
+    this.buildWizardSteps();
+    this.wizardStarted = true;
+
+    // Activate the first step after the stepper renders
+    setTimeout(() => this.onStepActivated(), 0);
+  }
+
+  private buildWizardSteps(): void {
+    const rawSteps = this.packageInfo.installSteps[this.selectedConnectivity] || [];
+    this.wizardSteps = [];
+    let i = 0;
+    while (i < rawSteps.length) {
+      const step = rawSteps[i];
+      if (step.type === InstallStepType.SHOW_INSTRUCTION) {
+        this.wizardSteps.push({
+          type: 'instruction',
+          label: step.name,
+          rawSteps: [step]
+        });
+        i++;
+      } else if (step.type === InstallStepType.SHOW_FORM) {
+        this.wizardSteps.push({
+          type: 'form',
+          label: step.name,
+          rawSteps: [step]
+        });
+        i++;
+      } else if (ENTITY_STEP_TYPES.has(step.type)) {
+        // Group consecutive entity steps
+        const group: DeviceInstallStep[] = [];
+        while (i < rawSteps.length && ENTITY_STEP_TYPES.has(rawSteps[i].type)) {
+          group.push(rawSteps[i]);
+          i++;
+        }
+        this.wizardSteps.push({
+          type: 'progress',
+          label: 'Provisioning',
+          rawSteps: group
+        });
+      } else {
+        // Skip unsupported steps (CONVERTER, INTEGRATION)
+        i++;
+      }
+    }
+    // Initialize form groups
+    for (const ws of this.wizardSteps) {
+      if (ws.type === 'form') {
+        this.initFormStep(ws);
+      }
+    }
+  }
+
+  private initFormStep(ws: WizardStep): void {
+    const formJson = this.zipFiles.get(ws.rawSteps[0].file) || '[]';
+    ws.formFields = JSON.parse(formJson) as FormFieldDefinition[];
+    const controls: Record<string, UntypedFormControl> = {};
+    for (const field of ws.formFields) {
       const validators = [];
       if (field.required) {
         validators.push(Validators.required);
@@ -249,42 +291,54 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       if (field.validators?.length > 0) {
         validators.push(Validators.pattern(field.validators[0].pattern));
       }
-      const initialValue = field.key in this.formValues
-        ? this.formValues[field.key]
-        : (field.defaultValue ?? (field.type === FormFieldType.BOOLEAN ? false : ''));
+      const initialValue = field.defaultValue ?? (field.type === FormFieldType.BOOLEAN ? false : '');
       controls[field.key] = new UntypedFormControl(initialValue, validators);
       if (field.type === FormFieldType.PASSWORD) {
         this.passwordVisible[field.key] = false;
       }
     }
-    this.currentFormGroup = new UntypedFormGroup(controls);
+    ws.formGroup = new UntypedFormGroup(controls);
   }
 
-  private collectAndRunEntitySteps(): void {
-    this.entitySteps = [];
-    let i = this.currentStepIndex;
-    while (i < this.steps.length && ENTITY_STEP_TYPES.has(this.steps[i].type)) {
-      this.entitySteps.push({
-        step: this.steps[i],
-        status: 'pending',
-        resolvedName: this.resolveVariables(this.steps[i].name)
-      });
-      i++;
+  private onStepActivated(): void {
+    const step = this.currentWizardStep;
+    if (!step) {
+      return;
     }
-    this.currentView = 'progress';
-    this.progressError = null;
-    this.runEntitySteps();
+    if (step.type === 'instruction') {
+      const raw = this.zipFiles.get(step.rawSteps[0].file) || '';
+      step.markdown = this.resolveVariables(raw);
+    } else if (step.type === 'progress' && !step.progressDone) {
+      this.initAndRunEntitySteps(step);
+    }
   }
 
-  private async runEntitySteps(): Promise<void> {
-    for (const ep of this.entitySteps) {
+  private initAndRunEntitySteps(ws: WizardStep): void {
+    ws.entitySteps = ws.rawSteps.map(s => ({
+      step: s,
+      status: 'pending' as const,
+      resolvedName: this.resolveVariables(s.name)
+    }));
+    ws.progressError = null;
+    ws.progressDone = false;
+    this.runEntitySteps(ws);
+  }
+
+  private async runEntitySteps(ws: WizardStep): Promise<void> {
+    for (const ep of ws.entitySteps) {
       if (ep.status === 'success') {
         continue;
       }
       ep.status = 'running';
       ep.errorMessage = null;
       try {
+        const startTime = Date.now();
         const output = await this.createEntity(ep.step);
+        // Ensure minimum visible time per step
+        const elapsed = Date.now() - startTime;
+        if (elapsed < ENTITY_STEP_MIN_DELAY) {
+          await this.delay(ENTITY_STEP_MIN_DELAY - elapsed);
+        }
         ep.entityOutput = output;
         ep.status = 'success';
 
@@ -292,13 +346,14 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         if (alias) {
           this.entityOutputs.set(alias, output);
         }
-        const stepIdx = this.steps.indexOf(ep.step);
+        const rawSteps = this.packageInfo.installSteps[this.selectedConnectivity] || [];
+        const stepIdx = rawSteps.indexOf(ep.step);
         if (stepIdx >= 0) {
           this.positionalOutputs.set(stepIdx + 1, output);
         }
 
         // Re-resolve names of remaining pending steps
-        for (const remaining of this.entitySteps) {
+        for (const remaining of ws.entitySteps) {
           if (remaining.status === 'pending') {
             remaining.resolvedName = this.resolveVariables(remaining.step.name);
           }
@@ -306,26 +361,27 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       } catch (err: any) {
         ep.status = 'error';
         ep.errorMessage = err?.error?.message || err?.message || 'Unknown error';
-        this.progressError = ep.errorMessage;
+        ws.progressError = ep.errorMessage;
         return;
       }
     }
 
-    // All entity steps succeeded — advance past them
-    const lastEntityIdx = this.currentStepIndex + this.entitySteps.length - 1;
-    this.currentStepIndex = lastEntityIdx + 1;
-
-    // Report install
+    // All done — report install
+    ws.progressDone = true;
     try {
       await firstValueFrom(
         this.data.iotHubApiService.reportVersionInstalled(this.data.item.id as string, { ignoreLoading: true })
       );
     } catch (_e) {
-      // Non-critical — best effort
+      // Non-critical
     }
 
-    // Advance to next step (instruction after entities, or done)
-    this.advanceToCurrentStep();
+    // Auto-advance to next step after a short pause
+    if (!this.isLastWizardStep) {
+      await this.delay(500);
+      this.stepper.next();
+      this.onStepActivated();
+    }
   }
 
   private async createEntity(step: DeviceInstallStep): Promise<EntityStepOutput> {
@@ -383,5 +439,9 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     const page = await firstValueFrom(this.ruleChainService.getRuleChains(new PageLink(100, 0, name)));
     const match = page.data.find(rc => rc.name === name);
     return match ? { id: match.id.id, name: match.name } : null;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

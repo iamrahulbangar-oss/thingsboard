@@ -21,197 +21,212 @@
   </div>
 } @else {
   <div class="tb-device-install-header">
-    <h2 class="tb-device-install-title">{{ packageInfo?.name || data.item.name }}</h2>
-    @if (selectedConnectivity) {
-      <span class="tb-device-install-badge">{{ getConnectivityLabel(selectedConnectivity) }}</span>
+    <h2 class="tb-device-install-title">{{ 'iot-hub.device-install-title' | translate:{ name: packageInfo?.name || data.item.name } }}</h2>
+    @if (selectedConnectivity && wizardStarted) {
+      <span class="tb-device-install-badge">{{ connectivityLabels.get(selectedConnectivity) }}</span>
     }
     <button mat-icon-button (click)="cancel()" tabindex="-1">
       <mat-icon>close</mat-icon>
     </button>
   </div>
   <mat-divider></mat-divider>
-  <div class="tb-device-install-body">
-    @switch (currentView) {
-      @case ('connectivity') {
-        <div class="tb-device-install-connectivity">
-          <p>{{ 'iot-hub.device-install-select-connectivity' | translate }}</p>
-          <div class="tb-connectivity-options">
-            @for (ct of availableConnectivityTypes; track ct) {
-              <button mat-stroked-button
-                      class="tb-connectivity-button"
-                      [class.selected]="selectedConnectivity === ct"
-                      (click)="selectConnectivity(ct)">
-                {{ getConnectivityLabel(ct) }}
-              </button>
-            }
-          </div>
+
+  @if (!wizardStarted) {
+    <!-- Connectivity selector -->
+    <div class="tb-device-install-body">
+      <div class="tb-device-install-connectivity">
+        <p>{{ 'iot-hub.device-install-select-connectivity' | translate }}</p>
+        <div class="tb-connectivity-options">
+          @for (ct of availableConnectivityTypes; track ct) {
+            <button mat-stroked-button
+                    class="tb-connectivity-button"
+                    [class.selected]="selectedConnectivity === ct"
+                    (click)="selectConnectivity(ct)">
+              {{ connectivityLabels.get(ct) || ct }}
+            </button>
+          }
         </div>
-      }
-      @case ('instruction') {
-        <div class="tb-device-install-instruction">
-          <tb-markdown [data]="currentMarkdown"
-                       [usePlainMarkdown]="true">
-          </tb-markdown>
-        </div>
-      }
-      @case ('form') {
-        <div class="tb-device-install-form">
-          @if (currentFormGroup) {
-            <form [formGroup]="currentFormGroup">
-              @for (field of currentFormFields; track field.key) {
-                @switch (field.type) {
-                  @case ('BOOLEAN') {
-                    <mat-checkbox [formControlName]="field.key">
-                      {{ field.label }}
-                    </mat-checkbox>
-                  }
-                  @case ('SELECT') {
-                    <mat-form-field appearance="outline">
-                      <mat-label>{{ field.label }}</mat-label>
-                      <mat-select [formControlName]="field.key">
-                        @for (opt of field.options; track opt.value) {
-                          <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+      </div>
+    </div>
+    <mat-dialog-actions align="end">
+      <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+      <button mat-flat-button color="primary"
+              [disabled]="!selectedConnectivity"
+              (click)="confirmConnectivity()">
+        {{ 'action.next' | translate }}
+      </button>
+    </mat-dialog-actions>
+  } @else {
+    <!-- Stepper wizard -->
+    <div class="tb-device-install-stepper-container">
+      <mat-horizontal-stepper #installStepper
+                              [linear]="true"
+                              labelPosition="bottom">
+        <ng-template matStepperIcon="edit">
+          <mat-icon>done</mat-icon>
+        </ng-template>
+
+        @for (ws of wizardSteps; track ws.label; let i = $index; let last = $last) {
+          <mat-step [editable]="false"
+                    [completed]="ws.type === 'progress' ? ws.progressDone : false"
+                    [stepControl]="ws.type === 'form' ? ws.formGroup : null">
+            <ng-template matStepLabel>{{ ws.label }}</ng-template>
+
+            <div class="tb-wizard-step-content">
+              @switch (ws.type) {
+
+                @case ('instruction') {
+                  <div class="tb-device-install-instruction">
+                    <tb-markdown [data]="ws.markdown"
+                                 [usePlainMarkdown]="true">
+                    </tb-markdown>
+                  </div>
+                }
+
+                @case ('form') {
+                  <div class="tb-device-install-form">
+                    @if (ws.formGroup) {
+                      <form [formGroup]="ws.formGroup">
+                        @for (field of ws.formFields; track field.key) {
+                          @switch (field.type) {
+                            @case ('BOOLEAN') {
+                              <mat-checkbox [formControlName]="field.key">
+                                {{ field.label }}
+                              </mat-checkbox>
+                            }
+                            @case ('SELECT') {
+                              <mat-form-field appearance="outline">
+                                <mat-label>{{ field.label }}</mat-label>
+                                <mat-select [formControlName]="field.key">
+                                  @for (opt of field.options; track opt.value) {
+                                    <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+                                  }
+                                </mat-select>
+                                @if (ws.formGroup.controls[field.key]?.hasError('required')) {
+                                  <mat-error>{{ field.label + ' is required' }}</mat-error>
+                                }
+                              </mat-form-field>
+                            }
+                            @case ('PASSWORD') {
+                              <mat-form-field appearance="outline">
+                                <mat-label>{{ field.label }}</mat-label>
+                                <input matInput [type]="passwordVisible[field.key] ? 'text' : 'password'"
+                                       [formControlName]="field.key">
+                                <button mat-icon-button matSuffix type="button"
+                                        (click)="passwordVisible[field.key] = !passwordVisible[field.key]">
+                                  <mat-icon>{{ passwordVisible[field.key] ? 'visibility_off' : 'visibility' }}</mat-icon>
+                                </button>
+                                @if (ws.formGroup.controls[field.key]?.hasError('required')) {
+                                  <mat-error>{{ field.label + ' is required' }}</mat-error>
+                                }
+                                @if (ws.formGroup.controls[field.key]?.hasError('pattern')) {
+                                  <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                                }
+                              </mat-form-field>
+                            }
+                            @case ('INTEGER') {
+                              <mat-form-field appearance="outline">
+                                <mat-label>{{ field.label }}</mat-label>
+                                <input matInput type="number" [formControlName]="field.key">
+                                @if (ws.formGroup.controls[field.key]?.hasError('required')) {
+                                  <mat-error>{{ field.label + ' is required' }}</mat-error>
+                                }
+                                @if (ws.formGroup.controls[field.key]?.hasError('pattern')) {
+                                  <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                                }
+                              </mat-form-field>
+                            }
+                            @default {
+                              <mat-form-field appearance="outline">
+                                <mat-label>{{ field.label }}</mat-label>
+                                <input matInput [formControlName]="field.key">
+                                @if (ws.formGroup.controls[field.key]?.hasError('required')) {
+                                  <mat-error>{{ field.label + ' is required' }}</mat-error>
+                                }
+                                @if (ws.formGroup.controls[field.key]?.hasError('pattern')) {
+                                  <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                                }
+                              </mat-form-field>
+                            }
+                          }
+                          @if (field.helpText) {
+                            <div class="tb-form-field-help">{{ field.helpText }}</div>
+                          }
+                          @if (field.helpImage) {
+                            <img class="tb-form-field-help-image" [src]="field.helpImage" [alt]="field.label">
+                          }
                         }
-                      </mat-select>
-                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ field.label + ' is required' }}</mat-error>
-                      }
-                    </mat-form-field>
-                  }
-                  @case ('PASSWORD') {
-                    <mat-form-field appearance="outline">
-                      <mat-label>{{ field.label }}</mat-label>
-                      <input matInput [type]="passwordVisible[field.key] ? 'text' : 'password'"
-                             [formControlName]="field.key">
-                      <button mat-icon-button matSuffix type="button"
-                              (click)="passwordVisible[field.key] = !passwordVisible[field.key]">
-                        <mat-icon>{{ passwordVisible[field.key] ? 'visibility_off' : 'visibility' }}</mat-icon>
-                      </button>
-                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ field.label + ' is required' }}</mat-error>
-                      }
-                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
-                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
-                      }
-                    </mat-form-field>
-                  }
-                  @case ('INTEGER') {
-                    <mat-form-field appearance="outline">
-                      <mat-label>{{ field.label }}</mat-label>
-                      <input matInput type="number" [formControlName]="field.key">
-                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ field.label + ' is required' }}</mat-error>
-                      }
-                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
-                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
-                      }
-                    </mat-form-field>
-                  }
-                  @default {
-                    <mat-form-field appearance="outline">
-                      <mat-label>{{ field.label }}</mat-label>
-                      <input matInput [formControlName]="field.key">
-                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
-                        <mat-error>{{ field.label + ' is required' }}</mat-error>
-                      }
-                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
-                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
-                      }
-                    </mat-form-field>
-                  }
+                      </form>
+                    }
+                  </div>
                 }
-                @if (field.helpText) {
-                  <div class="tb-form-field-help">{{ field.helpText }}</div>
-                }
-                @if (field.helpImage) {
-                  <img class="tb-form-field-help-image" [src]="field.helpImage" [alt]="field.label">
+
+                @case ('progress') {
+                  <div class="tb-device-install-progress">
+                    @for (ep of ws.entitySteps; track ep.step.name) {
+                      <div class="tb-progress-row">
+                        <div class="tb-progress-icon">
+                          @switch (ep.status) {
+                            @case ('pending') {
+                              <mat-icon class="tb-progress-pending">radio_button_unchecked</mat-icon>
+                            }
+                            @case ('running') {
+                              <mat-spinner diameter="20"></mat-spinner>
+                            }
+                            @case ('success') {
+                              <mat-icon class="tb-progress-success">check_circle</mat-icon>
+                            }
+                            @case ('error') {
+                              <mat-icon class="tb-progress-error">error</mat-icon>
+                            }
+                          }
+                        </div>
+                        <div class="tb-progress-info">
+                          <span class="tb-progress-label">{{ ep.resolvedName || ep.step.name }}</span>
+                          @if (ep.status === 'error' && ep.errorMessage) {
+                            <span class="tb-progress-error-msg">{{ ep.errorMessage }}</span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
                 }
               }
-            </form>
-          }
-        </div>
-      }
-      @case ('progress') {
-        <div class="tb-device-install-progress">
-          @for (ep of entitySteps; track ep.step.name) {
-            <div class="tb-progress-row">
-              <div class="tb-progress-icon">
-                @switch (ep.status) {
-                  @case ('pending') {
-                    <mat-icon class="tb-progress-pending">radio_button_unchecked</mat-icon>
-                  }
-                  @case ('running') {
-                    <mat-spinner diameter="20"></mat-spinner>
-                  }
-                  @case ('success') {
-                    <mat-icon class="tb-progress-success">check_circle</mat-icon>
-                  }
-                  @case ('error') {
-                    <mat-icon class="tb-progress-error">error</mat-icon>
-                  }
-                }
-              </div>
-              <div>
-                <div class="tb-progress-label">{{ ep.resolvedName || ep.step.name }}</div>
-                @if (ep.status === 'error' && ep.errorMessage) {
-                  <div class="tb-progress-error-msg">{{ ep.errorMessage }}</div>
-                }
-              </div>
             </div>
+          </mat-step>
+        }
+      </mat-horizontal-stepper>
+    </div>
+
+    <mat-dialog-actions align="end">
+      @if (currentWizardStep; as step) {
+        @switch (step.type) {
+          @case ('instruction') {
+            <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+            <button mat-flat-button color="primary" (click)="nextStep()">
+              {{ (isLastWizardStep ? 'action.done' : 'action.next') | translate }}
+            </button>
           }
-        </div>
-        @if (progressError) {
-          <div class="tb-device-install-error">{{ progressError }}</div>
+          @case ('form') {
+            <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+            <button mat-flat-button color="primary" (click)="nextStep()">
+              {{ 'action.next' | translate }}
+            </button>
+          }
+          @case ('progress') {
+            @if (step.progressError) {
+              <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+              <button mat-flat-button color="primary" (click)="retryEntitySteps(step)">
+                {{ 'action.retry' | translate }}
+              </button>
+            } @else if (step.progressDone && isLastWizardStep) {
+              <button mat-flat-button color="primary" (click)="done()">
+                {{ 'action.done' | translate }}
+              </button>
+            }
+          }
         }
       }
-      @case ('done') {
-        <div class="tb-device-install-done">
-          @if (currentMarkdown) {
-            <tb-markdown [data]="currentMarkdown"
-                         [usePlainMarkdown]="true">
-            </tb-markdown>
-          } @else {
-            <p class="tb-done-message">{{ 'iot-hub.install-success-desc' | translate:{ name: packageInfo?.name } }}</p>
-          }
-        </div>
-      }
-    }
-  </div>
-  <mat-dialog-actions align="end">
-    @switch (currentView) {
-      @case ('connectivity') {
-        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
-        <button mat-flat-button color="primary"
-                [disabled]="!selectedConnectivity"
-                (click)="next()">
-          {{ 'action.next' | translate }}
-        </button>
-      }
-      @case ('instruction') {
-        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
-        <button mat-flat-button color="primary" (click)="next()">
-          {{ (isLastStep() ? 'action.done' : 'action.next') | translate }}
-        </button>
-      }
-      @case ('form') {
-        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
-        <button mat-flat-button color="primary" (click)="next()">
-          {{ 'action.next' | translate }}
-        </button>
-      }
-      @case ('progress') {
-        <button mat-button (click)="cancel()" [disabled]="!progressError">{{ 'action.cancel' | translate }}</button>
-        @if (progressError) {
-          <button mat-flat-button color="primary" (click)="retryEntitySteps()">
-            {{ 'action.retry' | translate }}
-          </button>
-        }
-      }
-      @case ('done') {
-        <button mat-flat-button color="primary" (click)="done()">
-          {{ 'action.done' | translate }}
-        </button>
-      }
-    }
-  </mat-dialog-actions>
+    </mat-dialog-actions>
+  }
 }
