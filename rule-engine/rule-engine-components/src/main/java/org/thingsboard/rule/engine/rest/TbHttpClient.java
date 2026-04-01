@@ -237,7 +237,6 @@ public class TbHttpClient {
                 request.body(BodyInserters.fromValue(getData(msg, config.isParseToPlainText())));
             }
 
-            semaphoreAcquired = false; // subscribe callbacks own the release now
             request
                     .retrieve()
                     .toEntity(String.class)
@@ -258,11 +257,12 @@ public class TbHttpClient {
 
                         onFailure.accept(processException(msg, throwable), processThrowable(throwable));
                     });
+            semaphoreAcquired = false; // subscribe callbacks own the release now
         } catch (Exception e) {
             if (semaphoreAcquired) {
                 semaphore.release();
             }
-            onFailure.accept(processException(msg, e), e);
+            onFailure.accept(processException(msg, e), processThrowable(e));
         }
     }
 
