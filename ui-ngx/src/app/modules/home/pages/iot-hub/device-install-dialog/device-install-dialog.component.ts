@@ -18,6 +18,7 @@ import { Component, Inject, OnInit } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { UntypedFormControl, UntypedFormGroup, Validators } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
+import { PageLink } from '@shared/models/page/page-link';
 import { MpItemVersionView } from '@shared/models/iot-hub/iot-hub-version.models';
 import { IotHubApiService } from '@core/http/iot-hub-api.service';
 import { DeviceProfileService } from '@core/http/device-profile.service';
@@ -356,6 +357,10 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       case InstallStepType.RULE_CHAIN: {
         const ruleChain = template.ruleChain || template;
         const metadata = template.metadata;
+        const existing = await this.findRuleChainByName(ruleChain.name);
+        if (existing) {
+          return existing;
+        }
         const saved = await firstValueFrom(this.ruleChainService.saveRuleChain(ruleChain));
         if (metadata) {
           metadata.ruleChainId = saved.id;
@@ -371,6 +376,12 @@ export class TbDeviceInstallDialogComponent implements OnInit {
   private async findDeviceProfileByName(name: string): Promise<EntityStepOutput | null> {
     const profiles = await firstValueFrom(this.deviceProfileService.getDeviceProfileNames());
     const match = profiles.find(p => p.name === name);
+    return match ? { id: match.id.id, name: match.name } : null;
+  }
+
+  private async findRuleChainByName(name: string): Promise<EntityStepOutput | null> {
+    const page = await firstValueFrom(this.ruleChainService.getRuleChains(new PageLink(100, 0, name)));
+    const match = page.data.find(rc => rc.name === name);
     return match ? { id: match.id.id, name: match.name } : null;
   }
 }
