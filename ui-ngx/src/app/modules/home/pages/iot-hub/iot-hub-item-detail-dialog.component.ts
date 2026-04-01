@@ -27,6 +27,7 @@ import { getEntityDetailsPageURL } from '@core/utils';
 import { TbIotHubInstallDialogComponent, IotHubInstallDialogData } from './iot-hub-install-dialog.component';
 import { TbIotHubUpdateDialogComponent, IotHubUpdateDialogData } from './iot-hub-update-dialog.component';
 import { TbIotHubDeleteDialogComponent, IotHubDeleteDialogData } from './iot-hub-delete-dialog.component';
+import { TbDeviceInstallDialogComponent, DeviceInstallDialogData } from './device-install-dialog/device-install-dialog.component';
 import { SolutionInstallDialogComponent } from '@home/components/solution/solution-install-dialog.component';
 import { SolutionTemplateInstalledItemDescriptor } from '@shared/models/iot-hub/iot-hub-installed-item.models';
 
@@ -239,6 +240,10 @@ export class TbIotHubItemDetailDialogComponent {
   }
 
   install(): void {
+    if (this.item.type === ItemType.DEVICE) {
+      this.installDevice();
+      return;
+    }
     const dialogRef = this.dialog.open(TbIotHubInstallDialogComponent, {
       panelClass: ['tb-dialog'],
       data: {
@@ -249,6 +254,30 @@ export class TbIotHubItemDetailDialogComponent {
     dialogRef.afterClosed().subscribe(result => {
       if (result === 'installed') {
         this.dialogRef.close('installed');
+      }
+    });
+  }
+
+  private installDevice(): void {
+    const versionId = this.item.id as string;
+    this.data.iotHubApiService.getVersionFileData(versionId, { ignoreLoading: true }).subscribe({
+      next: async (blob: Blob) => {
+        const zipData = await blob.arrayBuffer();
+        const dialogRef = this.dialog.open(TbDeviceInstallDialogComponent, {
+          panelClass: ['tb-dialog', 'tb-fullscreen-dialog'],
+          disableClose: true,
+          autoFocus: false,
+          data: {
+            item: this.item,
+            zipData,
+            iotHubApiService: this.data.iotHubApiService
+          } as DeviceInstallDialogData
+        });
+        dialogRef.afterClosed().subscribe(result => {
+          if (result === 'installed') {
+            this.dialogRef.close('installed');
+          }
+        });
       }
     });
   }
