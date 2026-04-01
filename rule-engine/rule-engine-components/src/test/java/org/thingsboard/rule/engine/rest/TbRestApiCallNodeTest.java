@@ -134,6 +134,8 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
             }
         });
 
+        given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
+
         TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
         config.setRequestMethod("DELETE");
         config.setHeaders(Collections.singletonMap("Foo", "Bar"));
@@ -191,6 +193,8 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
                 }
             }
         });
+
+        given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
 
         TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
         config.setRequestMethod("DELETE");
@@ -272,9 +276,6 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
     @ValueSource(booleans = {true, false})
     public void givenMaxParallelRequestsCountAndBadUrl_whenOnMsg_thenSemaphoreIsReleasedAndFailureReported(boolean forceAck) throws IOException {
         given(ctx.isExternalNodeForceAck()).willReturn(forceAck);
-        if (forceAck) {
-            given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
-        }
 
         TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
         config.setMaxParallelRequestsCount(1);
@@ -298,6 +299,56 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
         } else {
             verify(ctx).tellFailure(any(), any());
         }
+    }
+
+    @Test
+    public void givenMaxPendingRequestsExceeded_whenOnMsg_thenFailsImmediatelyAndQueuedRequestFiresAfterSlotOpens() throws IOException, InterruptedException {
+        CountDownLatch releaseResponse = new CountDownLatch(1);
+        setupServer("*", (request, response, context) -> {
+            try {
+                releaseResponse.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            response.setStatusCode(200);
+        });
+
+        given(ctx.isExternalNodeForceAck()).willReturn(false);
+        given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
+        TbMsg transformedMsg = TbMsg.newMsg()
+                .type(TbMsgType.POST_TELEMETRY_REQUEST)
+                .originator(originator)
+                .copyMetaData(metaData)
+                .data(TbMsg.EMPTY_JSON_OBJECT)
+                .build();
+        given(ctx.transformMsg(any(), any(), any())).willReturn(transformedMsg);
+
+        TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
+        config.setMaxParallelRequestsCount(1);
+        config.setMaxPendingRequests(1);
+        config.setRequestMethod("GET");
+        config.setIgnoreRequestBody(true);
+        config.setRestEndpointUrlPattern(String.format("http://localhost:%d/path", server.getLocalPort()));
+        initWithConfig(config);
+
+        TbMsg msg1 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+        TbMsg msg2 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+        TbMsg msg3 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+
+        restNode.onMsg(ctx, msg1);  // fires immediately (semaphore acquired)
+        restNode.onMsg(ctx, msg2);  // queues (semaphore exhausted, queue has room)
+        restNode.onMsg(ctx, msg3);  // fails immediately (queue full)
+
+        verify(ctx, timeout(1000)).tellFailure(any(), any());
+
+        releaseResponse.countDown();
+        verify(ctx, timeout(5000).times(2)).tellSuccess(any());
     }
 
     private static Stream<Arguments> givenFromVersionAndConfig_whenUpgrade_thenVerifyHasChangesAndConfig() {

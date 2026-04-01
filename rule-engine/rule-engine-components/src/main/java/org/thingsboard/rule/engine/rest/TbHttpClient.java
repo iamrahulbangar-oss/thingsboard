@@ -42,6 +42,7 @@ import org.thingsboard.rule.engine.credentials.CredentialsType;
 import org.thingsboard.server.common.data.StringUtils;
 import org.thingsboard.server.common.msg.TbMsg;
 import org.thingsboard.server.common.msg.TbMsgMetaData;
+import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.transport.ProxyProvider;
@@ -53,9 +54,10 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -90,12 +92,22 @@ public class TbHttpClient {
     private EventLoopGroup eventLoopGroup;
     private WebClient webClient;
     private Semaphore semaphore;
+    private ConcurrentLinkedQueue<PendingRequest> pendingQueue;
+    private AtomicInteger pendingCount;
+
+    private record PendingRequest(
+            TbContext ctx,
+            TbMsg msg,
+            Consumer<TbMsg> onSuccess,
+            BiConsumer<TbMsg, Throwable> onFailure) {}
 
     TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared) throws TbNodeException {
         try {
             this.config = config;
             if (config.getMaxParallelRequestsCount() > 0) {
                 semaphore = new Semaphore(config.getMaxParallelRequestsCount());
+                pendingQueue = new ConcurrentLinkedQueue<>();
+                pendingCount = new AtomicInteger(0);
             }
 
             ConnectionProvider connectionProvider = ConnectionProvider
@@ -213,56 +225,83 @@ public class TbHttpClient {
     public void processMessage(TbContext ctx, TbMsg msg,
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
-        AtomicBoolean semaphoreAcquired = new AtomicBoolean(false);
-        try {
-            if (semaphore != null) {
-                if (!semaphore.tryAcquire(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)) {
-                    onFailure.accept(msg, new RuntimeException("Timeout during waiting for reply!"));
+        if (semaphore != null && !semaphore.tryAcquire()) {
+            int maxPending = config.getMaxPendingRequests();
+            if (maxPending > 0) {
+                int count = pendingCount.incrementAndGet();
+                if (count > maxPending) {
+                    pendingCount.decrementAndGet();
+                    onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
                     return;
                 }
-                semaphoreAcquired.set(true);
+                pendingQueue.add(new PendingRequest(ctx, msg, onSuccess, onFailure));
+            } else {
+                onFailure.accept(msg, new RuntimeException("Max parallel requests limit exceeded!"));
             }
+            return;
+        }
+        doHttpCall(new PendingRequest(ctx, msg, onSuccess, onFailure));
+    }
 
-            String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), msg);
+    private void doHttpCall(PendingRequest request) {
+        try {
+            String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), request.msg());
             HttpMethod method = HttpMethod.valueOf(config.getRequestMethod());
             URI uri = buildEncodedUri(endpointUrl);
 
-            RequestBodySpec request = webClient
+            RequestBodySpec req = webClient
                     .method(method)
                     .uri(uri)
-                    .headers(headers -> prepareHeaders(headers, msg));
+                    .headers(headers -> prepareHeaders(headers, request.msg()));
 
             if ((HttpMethod.POST.equals(method) || HttpMethod.PUT.equals(method) ||
                     HttpMethod.PATCH.equals(method) || HttpMethod.DELETE.equals(method)) &&
                     !config.isIgnoreRequestBody()) {
-                request.body(BodyInserters.fromValue(getData(msg, config.isParseToPlainText())));
+                req.body(BodyInserters.fromValue(getData(request.msg(), config.isParseToPlainText())));
             }
 
-            request
-                    .retrieve()
+            req.retrieve()
                     .toEntity(String.class)
+                    .publishOn(Schedulers.fromExecutor(request.ctx().getExternalCallExecutor()))
                     .subscribe(responseEntity -> {
-                        if (semaphoreAcquired.compareAndSet(true, false)) {
-                            semaphore.release();
+                        if (semaphore != null) {
+                            transferPermitOrRelease();
                         }
-
                         if (responseEntity.getStatusCode().is2xxSuccessful()) {
-                            onSuccess.accept(processResponse(ctx, msg, responseEntity));
+                            request.onSuccess().accept(processResponse(request.ctx(), request.msg(), responseEntity));
                         } else {
-                            onFailure.accept(processFailureResponse(msg, responseEntity), null);
+                            request.onFailure().accept(processFailureResponse(request.msg(), responseEntity), null);
                         }
                     }, throwable -> {
-                        if (semaphoreAcquired.compareAndSet(true, false)) {
-                            semaphore.release();
+                        if (semaphore != null) {
+                            transferPermitOrRelease();
                         }
-
-                        onFailure.accept(processException(msg, throwable), processThrowable(throwable));
+                        request.onFailure().accept(processException(request.msg(), throwable), processThrowable(throwable));
                     });
         } catch (Exception e) {
-            if (semaphoreAcquired.compareAndSet(true, false)) {
-                semaphore.release();
+            if (semaphore != null) {
+                transferPermitOrRelease();
             }
-            onFailure.accept(processException(msg, e), processThrowable(e));
+            request.onFailure().accept(processException(request.msg(), e), processThrowable(e));
+        }
+    }
+
+    private void transferPermitOrRelease() {
+        while (true) {
+            PendingRequest next = pendingQueue.poll();
+            if (next == null) {
+                semaphore.release();
+                return;
+            }
+            pendingCount.decrementAndGet();
+            if (!next.msg().isValid()) {
+                log.warn("[{}] Dropping expired message from REST API call queue.", next.msg().getId());
+                next.onFailure().accept(next.msg(), new RuntimeException("Message is no longer valid. Dropped from queue."));
+                // Still holding the permit — try next
+                continue;
+            }
+            doHttpCall(next);
+            return;
         }
     }
 
