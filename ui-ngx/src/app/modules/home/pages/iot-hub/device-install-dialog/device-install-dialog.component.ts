@@ -337,6 +337,10 @@ export class TbDeviceInstallDialogComponent implements OnInit {
 
     switch (step.type) {
       case InstallStepType.DEVICE_PROFILE: {
+        const existing = await this.findDeviceProfileByName(template.name);
+        if (existing) {
+          return existing;
+        }
         const result = await firstValueFrom(this.deviceProfileService.saveDeviceProfile(template));
         return { id: result.id.id, name: result.name };
       }
@@ -362,5 +366,11 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       default:
         throw new Error(`Unsupported entity step type: ${step.type}`);
     }
+  }
+
+  private async findDeviceProfileByName(name: string): Promise<EntityStepOutput | null> {
+    const profiles = await firstValueFrom(this.deviceProfileService.getDeviceProfileNames());
+    const match = profiles.find(p => p.name === name);
+    return match ? { id: match.id.id, name: match.name } : null;
   }
 }

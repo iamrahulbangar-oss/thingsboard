@@ -82,7 +82,8 @@
         "upload": "Upload",
         "delete-anyway": "Delete anyway",
         "delete-selected": "Delete selected",
-        "set": "Set"
+        "set": "Set",
+        "retry": "Retry"
     },
     "aggregation": {
         "aggregation": "Aggregation",
