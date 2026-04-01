@@ -224,13 +224,41 @@ public class TbHttpClient {
     public void processMessage(TbContext ctx, TbMsg msg,
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
-        if (semaphore != null && !semaphore.tryAcquire()) {
+        if (semaphore != null) {
             if (!pendingQueue.offer(new PendingRequest(ctx, msg, onSuccess, onFailure))) {
                 onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
+                return;
             }
+            tryProcess();
             return;
         }
         doHttpCall(new PendingRequest(ctx, msg, onSuccess, onFailure));
+    }
+
+    /**
+     * Tries to acquire one concurrency slot and fire the next queued request.
+     * Stale messages (whose message pack has expired) are silently dropped.
+     * Safe to call from any thread under high concurrency.
+     */
+    private void tryProcess() {
+        while (true) {
+            if (!semaphore.tryAcquire()) {
+                return; // all slots are in use; a callback will call tryProcess() when one frees up
+            }
+            PendingRequest next = pendingQueue.poll();
+            if (next == null) {
+                semaphore.release();
+                return; // queue is empty; slot released
+            }
+            if (!next.msg().isValid()) {
+                semaphore.release();
+                log.warn("[{}] Dropping stale message from REST API call queue.", next.msg().getId());
+                next.onFailure().accept(next.msg(), new RuntimeException("Message is no longer valid. Dropped from queue."));
+                continue; // slot released — loop to check if there's a valid next item
+            }
+            doHttpCall(next);
+            return; // slot is now owned by doHttpCall; its callback will call tryProcess()
+        }
     }
 
     private void doHttpCall(PendingRequest request) {
@@ -254,43 +282,28 @@ public class TbHttpClient {
                     .toEntity(String.class)
                     .publishOn(Schedulers.fromExecutor(request.ctx().getExternalCallExecutor()))
                     .subscribe(responseEntity -> {
-                        if (semaphore != null) {
-                            transferPermitOrRelease();
-                        }
                         if (responseEntity.getStatusCode().is2xxSuccessful()) {
                             request.onSuccess().accept(processResponse(request.ctx(), request.msg(), responseEntity));
                         } else {
                             request.onFailure().accept(processFailureResponse(request.msg(), responseEntity), null);
                         }
-                    }, throwable -> {
                         if (semaphore != null) {
-                            transferPermitOrRelease();
+                            semaphore.release();
+                            tryProcess();
                         }
+                    }, throwable -> {
                         request.onFailure().accept(processException(request.msg(), throwable), processThrowable(throwable));
+                        if (semaphore != null) {
+                            semaphore.release();
+                            tryProcess();
+                        }
                     });
         } catch (Exception e) {
-            if (semaphore != null) {
-                transferPermitOrRelease();
-            }
             request.onFailure().accept(processException(request.msg(), e), processThrowable(e));
-        }
-    }
-
-    private void transferPermitOrRelease() {
-        while (true) {
-            PendingRequest next = pendingQueue.poll();
-            if (next == null) {
+            if (semaphore != null) {
                 semaphore.release();
-                return;
+                tryProcess();
             }
-            if (!next.msg().isValid()) {
-                log.warn("[{}] Dropping expired message from REST API call queue.", next.msg().getId());
-                next.onFailure().accept(next.msg(), new RuntimeException("Message is no longer valid. Dropped from queue."));
-                // Still holding the permit — try next
-                continue;
-            }
-            doHttpCall(next);
-            return;
         }
     }
 
