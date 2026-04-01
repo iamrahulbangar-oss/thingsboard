@@ -51,6 +51,7 @@ export interface WizardStep {
   type: WizardStepType;
   label: string;
   rawSteps: DeviceInstallStep[];
+  completed: boolean;
   // Instruction
   markdown?: string;
   // Form
@@ -172,6 +173,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       this.done();
       return;
     }
+    step.completed = true;
     this.stepper.next();
     this.onStepActivated();
   }
@@ -244,14 +246,16 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         this.wizardSteps.push({
           type: 'instruction',
           label: step.name,
-          rawSteps: [step]
+          rawSteps: [step],
+          completed: false
         });
         i++;
       } else if (step.type === InstallStepType.SHOW_FORM) {
         this.wizardSteps.push({
           type: 'form',
           label: step.name,
-          rawSteps: [step]
+          rawSteps: [step],
+          completed: false
         });
         i++;
       } else if (ENTITY_STEP_TYPES.has(step.type)) {
@@ -264,7 +268,8 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         this.wizardSteps.push({
           type: 'progress',
           label: 'Provisioning',
-          rawSteps: group
+          rawSteps: group,
+          completed: false
         });
       } else {
         // Skip unsupported steps (CONVERTER, INTEGRATION)
@@ -368,6 +373,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
 
     // All done — report install
     ws.progressDone = true;
+    ws.completed = true;
     try {
       await firstValueFrom(
         this.data.iotHubApiService.reportVersionInstalled(this.data.item.id as string, { ignoreLoading: true })

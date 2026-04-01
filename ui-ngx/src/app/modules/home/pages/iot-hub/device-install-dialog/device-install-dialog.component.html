@@ -68,7 +68,7 @@
 
         @for (ws of wizardSteps; track ws.label; let i = $index; let last = $last) {
           <mat-step [editable]="false"
-                    [completed]="ws.type === 'progress' ? ws.progressDone : false"
+                    [completed]="ws.completed"
                     [stepControl]="ws.type === 'form' ? ws.formGroup : null">
             <ng-template matStepLabel>{{ ws.label }}</ng-template>
 
