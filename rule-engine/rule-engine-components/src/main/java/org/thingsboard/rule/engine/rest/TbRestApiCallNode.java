@@ -29,7 +29,6 @@ import org.thingsboard.server.common.data.util.TbPair;
 import org.thingsboard.server.common.msg.TbMsg;
 
 import java.util.List;
-import java.util.concurrent.Callable;
 
 @RuleNode(
         type = ComponentType.EXTERNAL,
@@ -66,23 +65,22 @@ public class TbRestApiCallNode extends TbAbstractExternalNode {
     @Override
     public void onMsg(TbContext ctx, TbMsg msg) {
         var tbMsg = ackIfNeeded(ctx, msg);
-        Callable<Void> process = () -> {
-            httpClient.processMessage(ctx, tbMsg,
-                    m -> tellSuccess(ctx, m),
-                    (m, t) -> tellFailure(ctx, m, t));
-            return null;
-        };
         if (forceAck) {
-            DonAsynchron.withCallback(ctx.getExternalCallExecutor().executeAsync(process),
+            DonAsynchron.withCallback(ctx.getExternalCallExecutor().executeAsync(() -> {
+                        processMessage(ctx, tbMsg);
+                        return null;
+                    }),
                     r -> {},
                     t -> tellFailure(ctx, tbMsg, t));
         } else {
-            try {
-                process.call();
-            } catch (Exception e) {
-                tellFailure(ctx, tbMsg, e);
-            }
+            processMessage(ctx, tbMsg);
         }
+    }
+
+    private void processMessage(TbContext ctx, TbMsg msg) {
+        httpClient.processMessage(ctx, msg,
+                m -> tellSuccess(ctx, m),
+                (m, t) -> tellFailure(ctx, m, t));
     }
 
     @Override
