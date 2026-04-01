@@ -213,14 +213,14 @@ public class TbHttpClient {
     public void processMessage(TbContext ctx, TbMsg msg,
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
-        boolean semaphoreAcquired = false;
+        AtomicBoolean shouldReleaseSemaphore = new AtomicBoolean(false);
         try {
             if (semaphore != null) {
                 if (!semaphore.tryAcquire(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)) {
                     onFailure.accept(msg, new RuntimeException("Timeout during waiting for reply!"));
                     return;
                 }
-                semaphoreAcquired = true;
+                shouldReleaseSemaphore.set(true);
             }
 
             String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), msg);
@@ -238,12 +238,11 @@ public class TbHttpClient {
                 request.body(BodyInserters.fromValue(getData(msg, config.isParseToPlainText())));
             }
 
-            AtomicBoolean semaphoreReleased = new AtomicBoolean(false);
             request
                     .retrieve()
                     .toEntity(String.class)
                     .subscribe(responseEntity -> {
-                        if (semaphore != null && semaphoreReleased.compareAndSet(false, true)) {
+                        if (shouldReleaseSemaphore.compareAndSet(true, false)) {
                             semaphore.release();
                         }
 
@@ -253,15 +252,14 @@ public class TbHttpClient {
                             onFailure.accept(processFailureResponse(msg, responseEntity), null);
                         }
                     }, throwable -> {
-                        if (semaphore != null && semaphoreReleased.compareAndSet(false, true)) {
+                        if (shouldReleaseSemaphore.compareAndSet(true, false)) {
                             semaphore.release();
                         }
 
                         onFailure.accept(processException(msg, throwable), processThrowable(throwable));
                     });
-            semaphoreAcquired = false; // subscribe callbacks own the release now
         } catch (Exception e) {
-            if (semaphoreAcquired) {
+            if (shouldReleaseSemaphore.compareAndSet(true, false)) {
                 semaphore.release();
             }
             onFailure.accept(processException(msg, e), processThrowable(e));
