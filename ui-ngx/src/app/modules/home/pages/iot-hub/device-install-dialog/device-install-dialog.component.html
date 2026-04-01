@@ -1,0 +1,217 @@
+<!--
+
+    Copyright © 2016-2026 The Thingsboard Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+@if (loading) {
+  <div class="tb-device-install-loading">
+    <mat-spinner diameter="40"></mat-spinner>
+  </div>
+} @else {
+  <div class="tb-device-install-header">
+    <h2 class="tb-device-install-title">{{ packageInfo?.name || data.item.name }}</h2>
+    @if (selectedConnectivity) {
+      <span class="tb-device-install-badge">{{ getConnectivityLabel(selectedConnectivity) }}</span>
+    }
+    <button mat-icon-button (click)="cancel()" tabindex="-1">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+  <mat-divider></mat-divider>
+  <div class="tb-device-install-body">
+    @switch (currentView) {
+      @case ('connectivity') {
+        <div class="tb-device-install-connectivity">
+          <p>{{ 'iot-hub.device-install.select-connectivity' | translate }}</p>
+          <div class="tb-connectivity-options">
+            @for (ct of availableConnectivityTypes; track ct) {
+              <button mat-stroked-button
+                      class="tb-connectivity-button"
+                      [class.selected]="selectedConnectivity === ct"
+                      (click)="selectConnectivity(ct)">
+                {{ getConnectivityLabel(ct) }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+      @case ('instruction') {
+        <div class="tb-device-install-instruction">
+          <tb-markdown [markdownText]="currentMarkdown"
+                       [style]="'doc'">
+          </tb-markdown>
+        </div>
+      }
+      @case ('form') {
+        <div class="tb-device-install-form">
+          @if (currentFormGroup) {
+            <form [formGroup]="currentFormGroup">
+              @for (field of currentFormFields; track field.key) {
+                @switch (field.type) {
+                  @case ('BOOLEAN') {
+                    <mat-checkbox [formControlName]="field.key">
+                      {{ field.label }}
+                    </mat-checkbox>
+                  }
+                  @case ('SELECT') {
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ field.label }}</mat-label>
+                      <mat-select [formControlName]="field.key">
+                        @for (opt of field.options; track opt.value) {
+                          <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+                        }
+                      </mat-select>
+                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
+                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                      }
+                    </mat-form-field>
+                  }
+                  @case ('PASSWORD') {
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ field.label }}</mat-label>
+                      <input matInput [type]="passwordVisible[field.key] ? 'text' : 'password'"
+                             [formControlName]="field.key">
+                      <button mat-icon-button matSuffix type="button"
+                              (click)="passwordVisible[field.key] = !passwordVisible[field.key]">
+                        <mat-icon>{{ passwordVisible[field.key] ? 'visibility_off' : 'visibility' }}</mat-icon>
+                      </button>
+                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
+                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                      }
+                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
+                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                      }
+                    </mat-form-field>
+                  }
+                  @case ('INTEGER') {
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ field.label }}</mat-label>
+                      <input matInput type="number" [formControlName]="field.key">
+                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
+                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                      }
+                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
+                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                      }
+                    </mat-form-field>
+                  }
+                  @default {
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ field.label }}</mat-label>
+                      <input matInput [formControlName]="field.key">
+                      @if (currentFormGroup.controls[field.key]?.hasError('required')) {
+                        <mat-error>{{ 'iot-hub.device-install.field-required' | translate }}</mat-error>
+                      }
+                      @if (currentFormGroup.controls[field.key]?.hasError('pattern')) {
+                        <mat-error>{{ getPatternErrorMessage(field) }}</mat-error>
+                      }
+                    </mat-form-field>
+                  }
+                }
+                @if (field.helpText) {
+                  <div class="tb-form-field-help">{{ field.helpText }}</div>
+                }
+                @if (field.helpImage) {
+                  <img class="tb-form-field-help-image" [src]="resolveImageUrl(field.helpImage)" [alt]="field.label">
+                }
+              }
+            </form>
+          }
+        </div>
+      }
+      @case ('progress') {
+        <div class="tb-device-install-progress">
+          @for (ep of entitySteps; track ep.step.name) {
+            <div class="tb-progress-row">
+              <div class="tb-progress-icon">
+                @switch (ep.status) {
+                  @case ('pending') {
+                    <mat-icon class="tb-progress-pending">radio_button_unchecked</mat-icon>
+                  }
+                  @case ('running') {
+                    <mat-spinner diameter="20"></mat-spinner>
+                  }
+                  @case ('success') {
+                    <mat-icon class="tb-progress-success">check_circle</mat-icon>
+                  }
+                  @case ('error') {
+                    <mat-icon class="tb-progress-error">error</mat-icon>
+                  }
+                }
+              </div>
+              <div>
+                <div class="tb-progress-label">{{ ep.resolvedName || ep.step.name }}</div>
+                @if (ep.status === 'error' && ep.errorMessage) {
+                  <div class="tb-progress-error-msg">{{ ep.errorMessage }}</div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        @if (progressError) {
+          <div class="tb-device-install-error">{{ progressError }}</div>
+        }
+      }
+      @case ('done') {
+        <div class="tb-device-install-done">
+          @if (currentMarkdown) {
+            <tb-markdown [markdownText]="currentMarkdown"
+                         [style]="'doc'">
+            </tb-markdown>
+          } @else {
+            <p class="tb-done-message">{{ 'iot-hub.device-install.success' | translate:{ name: packageInfo?.name } }}</p>
+          }
+        </div>
+      }
+    }
+  </div>
+  <mat-dialog-actions align="end">
+    @switch (currentView) {
+      @case ('connectivity') {
+        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+        <button mat-flat-button color="primary"
+                [disabled]="!selectedConnectivity"
+                (click)="next()">
+          {{ 'action.next' | translate }}
+        </button>
+      }
+      @case ('instruction') {
+        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+        <button mat-flat-button color="primary" (click)="next()">
+          {{ (isLastStep() ? 'action.done' : 'action.next') | translate }}
+        </button>
+      }
+      @case ('form') {
+        <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+        <button mat-flat-button color="primary" (click)="next()">
+          {{ 'action.next' | translate }}
+        </button>
+      }
+      @case ('progress') {
+        <button mat-button (click)="cancel()" [disabled]="!progressError">{{ 'action.cancel' | translate }}</button>
+        @if (progressError) {
+          <button mat-flat-button color="primary" (click)="retryEntitySteps()">
+            {{ 'action.retry' | translate }}
+          </button>
+        }
+      }
+      @case ('done') {
+        <button mat-flat-button color="primary" (click)="done()">
+          {{ 'action.done' | translate }}
+        </button>
+      }
+    }
+  </mat-dialog-actions>
+}

@@ -27,6 +27,7 @@ import { TbIotHubItemCardComponent } from './iot-hub-item-card.component';
 import { TbIotHubInstalledItemsComponent } from './iot-hub-installed-items.component';
 import { TbIotHubUpdateDialogComponent } from './iot-hub-update-dialog.component';
 import { TbIotHubDeleteDialogComponent } from './iot-hub-delete-dialog.component';
+import { TbDeviceInstallDialogComponent } from './device-install-dialog/device-install-dialog.component';
 
 @NgModule({
   declarations: [
@@ -38,7 +39,8 @@ import { TbIotHubDeleteDialogComponent } from './iot-hub-delete-dialog.component
     TbIotHubItemCardComponent,
     TbIotHubInstalledItemsComponent,
     TbIotHubUpdateDialogComponent,
-    TbIotHubDeleteDialogComponent
+    TbIotHubDeleteDialogComponent,
+    TbDeviceInstallDialogComponent
   ],
   imports: [
     CommonModule,
