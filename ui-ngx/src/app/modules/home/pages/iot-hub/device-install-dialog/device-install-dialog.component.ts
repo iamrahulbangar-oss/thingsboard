@@ -89,7 +89,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     try {
       const JSZip = (await import('jszip')).default;
       const zip = await JSZip.loadAsync(this.data.zipData);
-      for (const [path, entry] of Object.entries(zip.files)) {
+      for (const [path, entry] of Object.entries(zip.files) as [string, any][]) {
         if (!entry.dir) {
           const content = await entry.async('string');
           this.zipFiles.set(path, content);

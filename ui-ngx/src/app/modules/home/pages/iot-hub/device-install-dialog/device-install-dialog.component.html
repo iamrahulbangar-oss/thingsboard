@@ -167,8 +167,8 @@
       @case ('done') {
         <div class="tb-device-install-done">
           @if (currentMarkdown) {
-            <tb-markdown [markdownText]="currentMarkdown"
-                         [style]="'doc'">
+            <tb-markdown [data]="currentMarkdown"
+                         [usePlainMarkdown]="true">
             </tb-markdown>
           } @else {
             <p class="tb-done-message">{{ 'iot-hub.install-success-desc' | translate:{ name: packageInfo?.name } }}</p>
