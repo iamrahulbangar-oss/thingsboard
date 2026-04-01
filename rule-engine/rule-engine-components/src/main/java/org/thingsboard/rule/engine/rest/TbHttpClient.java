@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -237,11 +238,12 @@ public class TbHttpClient {
                 request.body(BodyInserters.fromValue(getData(msg, config.isParseToPlainText())));
             }
 
+            AtomicBoolean semaphoreReleased = new AtomicBoolean(false);
             request
                     .retrieve()
                     .toEntity(String.class)
                     .subscribe(responseEntity -> {
-                        if (semaphore != null) {
+                        if (semaphore != null && semaphoreReleased.compareAndSet(false, true)) {
                             semaphore.release();
                         }
 
@@ -251,7 +253,7 @@ public class TbHttpClient {
                             onFailure.accept(processFailureResponse(msg, responseEntity), null);
                         }
                     }, throwable -> {
-                        if (semaphore != null) {
+                        if (semaphore != null && semaphoreReleased.compareAndSet(false, true)) {
                             semaphore.release();
                         }
 
