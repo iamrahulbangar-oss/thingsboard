@@ -54,10 +54,10 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -92,8 +92,7 @@ public class TbHttpClient {
     private EventLoopGroup eventLoopGroup;
     private WebClient webClient;
     private Semaphore semaphore;
-    private ConcurrentLinkedQueue<PendingRequest> pendingQueue;
-    private AtomicInteger pendingCount;
+    private BlockingQueue<PendingRequest> pendingQueue;
 
     private record PendingRequest(
             TbContext ctx,
@@ -106,8 +105,8 @@ public class TbHttpClient {
             this.config = config;
             if (config.getMaxParallelRequestsCount() > 0) {
                 semaphore = new Semaphore(config.getMaxParallelRequestsCount());
-                pendingQueue = new ConcurrentLinkedQueue<>();
-                pendingCount = new AtomicInteger(0);
+                int maxPending = config.getMaxPendingRequests();
+                pendingQueue = maxPending > 0 ? new LinkedBlockingQueue<>(maxPending) : new LinkedBlockingQueue<>();
             }
 
             ConnectionProvider connectionProvider = ConnectionProvider
@@ -226,17 +225,8 @@ public class TbHttpClient {
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
         if (semaphore != null && !semaphore.tryAcquire()) {
-            int maxPending = config.getMaxPendingRequests();
-            if (maxPending > 0) {
-                int count = pendingCount.incrementAndGet();
-                if (count > maxPending) {
-                    pendingCount.decrementAndGet();
-                    onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
-                    return;
-                }
-                pendingQueue.add(new PendingRequest(ctx, msg, onSuccess, onFailure));
-            } else {
-                onFailure.accept(msg, new RuntimeException("Max parallel requests limit exceeded!"));
+            if (!pendingQueue.offer(new PendingRequest(ctx, msg, onSuccess, onFailure))) {
+                onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
             }
             return;
         }
@@ -293,7 +283,6 @@ public class TbHttpClient {
                 semaphore.release();
                 return;
             }
-            pendingCount.decrementAndGet();
             if (!next.msg().isValid()) {
                 log.warn("[{}] Dropping expired message from REST API call queue.", next.msg().getId());
                 next.onFailure().accept(next.msg(), new RuntimeException("Message is no longer valid. Dropped from queue."));

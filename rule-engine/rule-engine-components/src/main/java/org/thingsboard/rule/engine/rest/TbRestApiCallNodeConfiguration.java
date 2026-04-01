@@ -63,7 +63,7 @@ public class TbRestApiCallNodeConfiguration implements NodeConfiguration<TbRestA
         configuration.setCredentials(new AnonymousCredentials());
         configuration.setIgnoreRequestBody(false);
         configuration.setMaxInMemoryBufferSizeInKb(256);
-        configuration.setMaxPendingRequests(1000);
+        configuration.setMaxPendingRequests(0);
         return configuration;
     }
 
