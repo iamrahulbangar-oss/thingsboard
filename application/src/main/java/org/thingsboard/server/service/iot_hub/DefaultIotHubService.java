@@ -24,8 +24,12 @@ import org.thingsboard.common.util.JacksonUtil;
 import org.thingsboard.server.common.data.Dashboard;
 import org.thingsboard.server.common.data.DeviceProfile;
 import org.thingsboard.server.common.data.cf.CalculatedField;
+import org.thingsboard.server.common.data.id.DashboardId;
+import org.thingsboard.server.common.data.id.DeviceId;
+import org.thingsboard.server.common.data.id.DeviceProfileId;
 import org.thingsboard.server.common.data.id.EntityId;
 import org.thingsboard.server.common.data.id.IotHubInstalledItemId;
+import org.thingsboard.server.common.data.id.RuleChainId;
 import org.thingsboard.server.common.data.id.TenantId;
 import org.thingsboard.server.common.data.iot_hub.CalculatedFieldInstalledItemDescriptor;
 import org.thingsboard.server.common.data.iot_hub.DashboardInstalledItemDescriptor;
@@ -45,12 +49,14 @@ import org.thingsboard.server.common.data.widget.WidgetTypeDetails;
 import org.thingsboard.server.dao.cf.CalculatedFieldService;
 import org.thingsboard.server.dao.dashboard.DashboardService;
 import org.thingsboard.server.dao.device.DeviceProfileService;
+import org.thingsboard.server.dao.device.DeviceService;
 import org.thingsboard.server.dao.iot_hub.IotHubInstalledItemService;
 import org.thingsboard.server.dao.rule.RuleChainService;
 import org.thingsboard.server.dao.widget.WidgetTypeService;
 import org.thingsboard.server.queue.util.TbCoreComponent;
 import org.thingsboard.server.service.entitiy.cf.TbCalculatedFieldService;
 import org.thingsboard.server.service.entitiy.dashboard.TbDashboardService;
+import org.thingsboard.server.service.entitiy.device.TbDeviceService;
 import org.thingsboard.server.service.entitiy.device.profile.TbDeviceProfileService;
 import org.thingsboard.server.service.entitiy.widgets.type.TbWidgetTypeService;
 import org.thingsboard.server.service.rule.TbRuleChainService;
@@ -58,6 +64,8 @@ import org.thingsboard.server.service.security.model.SecurityUser;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -80,6 +88,8 @@ public class DefaultIotHubService implements IotHubService {
     private final DashboardService dashboardService;
     private final CalculatedFieldService calculatedFieldService;
     private final DeviceProfileService deviceProfileService;
+    private final DeviceService deviceService;
+    private final TbDeviceService tbDeviceService;
     private final SolutionService solutionService;
 
     @Override
@@ -283,7 +293,12 @@ public class DefaultIotHubService implements IotHubService {
                 case "DASHBOARD" -> updateDashboard(user, tenantId, (DashboardInstalledItemDescriptor) descriptor, fileData);
                 case "CALCULATED_FIELD" -> updateCalculatedField(user, tenantId, (CalculatedFieldInstalledItemDescriptor) descriptor, fileData);
                 case "RULE_CHAIN" -> updateRuleChain(tenantId, (RuleChainInstalledItemDescriptor) descriptor, fileData);
-                case "DEVICE" -> updateDeviceProfile(user, tenantId, fileData);
+                case "DEVICE" -> {
+                    DeviceInstalledItemDescriptor dd = (DeviceInstalledItemDescriptor) descriptor;
+                    deleteDevicePackageEntities(tenantId, dd.getCreatedEntityIds(), user);
+                    dd.setCreatedEntityIds(null);
+                    dd.setDashboardId(null);
+                }
                 case "SOLUTION_TEMPLATE" -> {
                     SolutionTemplateInstalledItemDescriptor stDescriptor = (SolutionTemplateInstalledItemDescriptor) descriptor;
                     solutionService.deleteSolution(tenantId, stDescriptor.getCreatedEntityIds(), user);
@@ -475,6 +490,74 @@ public class DefaultIotHubService implements IotHubService {
     }
 
     @Override
+    public InstallItemVersionResult registerDeviceInstall(SecurityUser user, String versionId, DeviceInstalledItemDescriptor descriptor) {
+        TenantId tenantId = user.getTenantId();
+        log.info("[{}] Registering device package install for version: {}", tenantId, versionId);
+
+        try {
+            JsonNode versionInfo = iotHubRestClient.getVersionInfo(versionId);
+            String itemName = versionInfo.get("name").asText();
+            UUID itemId = UUID.fromString(versionInfo.get("itemId").asText());
+            String version = versionInfo.get("version").asText();
+
+            IotHubInstalledItem installedItem = new IotHubInstalledItem();
+            installedItem.setTenantId(tenantId);
+            installedItem.setItemId(itemId);
+            installedItem.setItemVersionId(UUID.fromString(versionId));
+            installedItem.setItemName(itemName);
+            installedItem.setItemType("DEVICE");
+            installedItem.setVersion(version);
+            installedItem.setDescriptor(descriptor);
+            iotHubInstalledItemService.save(tenantId, installedItem);
+
+            iotHubRestClient.reportVersionInstalled(versionId);
+            log.info("[{}] Registered device package install: {} (version {})", tenantId, itemName, version);
+
+            return InstallItemVersionResult.success(descriptor);
+        } catch (Exception e) {
+            log.error("[{}] Failed to register device package install: {}", tenantId, versionId, e);
+            return InstallItemVersionResult.error(e.getMessage());
+        }
+    }
+
+    private void deleteDevicePackageEntities(TenantId tenantId, List<EntityId> createdEntityIds, SecurityUser user) {
+        if (createdEntityIds == null || createdEntityIds.isEmpty()) {
+            return;
+        }
+        List<EntityId> reversed = new ArrayList<>(createdEntityIds);
+        Collections.reverse(reversed);
+        for (EntityId entityId : reversed) {
+            try {
+                deleteDevicePackageEntity(tenantId, entityId, user);
+            } catch (Exception e) {
+                log.error("[{}] Failed to delete device package entity: {}", tenantId, entityId, e);
+            }
+        }
+    }
+
+    private void deleteDevicePackageEntity(TenantId tenantId, EntityId entityId, SecurityUser user) {
+        switch (entityId.getEntityType()) {
+            case DEVICE -> {
+                var device = deviceService.findDeviceById(tenantId, new DeviceId(entityId.getId()));
+                if (device != null) tbDeviceService.delete(device, user);
+            }
+            case DEVICE_PROFILE -> {
+                var profile = deviceProfileService.findDeviceProfileById(tenantId, new DeviceProfileId(entityId.getId()));
+                if (profile != null) tbDeviceProfileService.delete(profile, user);
+            }
+            case DASHBOARD -> {
+                var dashboard = dashboardService.findDashboardById(tenantId, new DashboardId(entityId.getId()));
+                if (dashboard != null) tbDashboardService.delete(dashboard, user);
+            }
+            case RULE_CHAIN -> {
+                var ruleChain = ruleChainService.findRuleChainById(tenantId, new RuleChainId(entityId.getId()));
+                if (ruleChain != null) tbRuleChainService.delete(ruleChain, user);
+            }
+            default -> log.warn("[{}] Unsupported entity type for device package delete: {}", tenantId, entityId.getEntityType());
+        }
+    }
+
+    @Override
     public void deleteInstalledItem(SecurityUser user, IotHubInstalledItemId installedItemId) {
         TenantId tenantId = user.getTenantId();
         IotHubInstalledItem installedItem = iotHubInstalledItemService.findById(tenantId, installedItemId);
@@ -505,8 +588,8 @@ public class DefaultIotHubService implements IotHubService {
                     tbRuleChainService.delete(ruleChain, user);
                 }
             }
-        } else if (descriptor instanceof DeviceInstalledItemDescriptor) {
-            // no entity to delete for now
+        } else if (descriptor instanceof DeviceInstalledItemDescriptor dd) {
+            deleteDevicePackageEntities(tenantId, dd.getCreatedEntityIds(), user);
         } else if (descriptor instanceof SolutionTemplateInstalledItemDescriptor st) {
             solutionService.deleteSolution(tenantId, st.getCreatedEntityIds(), user);
         }

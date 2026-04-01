@@ -39,6 +39,8 @@ export interface RuleChainInstalledItemDescriptor {
 
 export interface DeviceInstalledItemDescriptor {
   type: 'DEVICE';
+  createdEntityIds?: { entityType: string; id: string }[];
+  dashboardId?: { id: string };
 }
 
 export interface SolutionTemplateInstalledItemDescriptor {

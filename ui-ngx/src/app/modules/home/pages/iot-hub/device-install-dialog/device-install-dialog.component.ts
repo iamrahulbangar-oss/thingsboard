@@ -371,15 +371,22 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       }
     }
 
-    // All done — report install
+    // All done — register install with created entity IDs
     ws.progressDone = true;
     ws.completed = true;
     try {
+      const createdEntityIds = this.collectCreatedEntityIds();
+      const dashboardId = this.findCreatedDashboardId();
       await firstValueFrom(
-        this.data.iotHubApiService.reportVersionInstalled(this.data.item.id as string, { ignoreLoading: true })
+        this.data.iotHubApiService.registerDeviceInstall(
+          this.data.item.id as string,
+          { createdEntityIds, dashboardId },
+          { ignoreLoading: true }
+        )
       );
     } catch (_e) {
-      // Non-critical
+      // Non-critical — entities are created, tracking registration failed
+      console.error('Failed to register device install', _e);
     }
 
     // Auto-advance to next step after a short pause
@@ -445,6 +452,46 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     const page = await firstValueFrom(this.ruleChainService.getRuleChains(new PageLink(100, 0, name)));
     const match = page.data.find(rc => rc.name === name);
     return match ? { id: match.id.id, name: match.name } : null;
+  }
+
+  private collectCreatedEntityIds(): { entityType: string; id: string }[] {
+    const ids: { entityType: string; id: string }[] = [];
+    for (const ws of this.wizardSteps) {
+      if (ws.type === 'progress' && ws.entitySteps) {
+        for (const ep of ws.entitySteps) {
+          if (ep.status === 'success' && ep.entityOutput) {
+            const entityType = this.stepTypeToEntityType(ep.step.type);
+            if (entityType) {
+              ids.push({ entityType, id: ep.entityOutput.id });
+            }
+          }
+        }
+      }
+    }
+    return ids;
+  }
+
+  private findCreatedDashboardId(): { id: string } | undefined {
+    for (const ws of this.wizardSteps) {
+      if (ws.type === 'progress' && ws.entitySteps) {
+        for (const ep of ws.entitySteps) {
+          if (ep.step.type === InstallStepType.DASHBOARD && ep.status === 'success' && ep.entityOutput) {
+            return { id: ep.entityOutput.id };
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private stepTypeToEntityType(stepType: InstallStepType): string | null {
+    switch (stepType) {
+      case InstallStepType.DEVICE_PROFILE: return 'DEVICE_PROFILE';
+      case InstallStepType.DEVICE: return 'DEVICE';
+      case InstallStepType.DASHBOARD: return 'DASHBOARD';
+      case InstallStepType.RULE_CHAIN: return 'RULE_CHAIN';
+      default: return null;
+    }
   }
 
   private delay(ms: number): Promise<void> {

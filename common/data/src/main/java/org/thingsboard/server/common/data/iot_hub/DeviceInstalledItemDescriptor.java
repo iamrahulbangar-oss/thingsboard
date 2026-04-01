@@ -16,8 +16,15 @@
 package org.thingsboard.server.common.data.iot_hub;
 
 import lombok.Data;
+import org.thingsboard.server.common.data.id.DashboardId;
+import org.thingsboard.server.common.data.id.EntityId;
+
+import java.util.List;
 
 @Data
 public class DeviceInstalledItemDescriptor implements IotHubInstalledItemDescriptor {
+
+    private List<EntityId> createdEntityIds;
+    private DashboardId dashboardId;
 
 }

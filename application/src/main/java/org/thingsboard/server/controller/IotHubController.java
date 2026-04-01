@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
 import org.thingsboard.server.common.data.exception.ThingsboardException;
+import org.thingsboard.server.common.data.iot_hub.DeviceInstalledItemDescriptor;
 import org.thingsboard.server.common.data.iot_hub.IotHubInstalledItem;
 import org.thingsboard.server.common.data.page.PageData;
 import org.thingsboard.server.common.data.page.PageLink;
@@ -62,6 +63,15 @@ public class IotHubController extends BaseController {
                                                          @RequestBody(required = false) JsonNode data,
                                                          HttpServletRequest request) throws ThingsboardException {
         return iotHubService.installItemVersion(getCurrentUser(), versionId, data, request);
+    }
+
+    @PreAuthorize("hasAuthority('TENANT_ADMIN')")
+    @PostMapping("/device/register")
+    @ResponseBody
+    public InstallItemVersionResult registerDeviceInstall(
+            @RequestParam String versionId,
+            @RequestBody DeviceInstalledItemDescriptor descriptor) throws ThingsboardException {
+        return iotHubService.registerDeviceInstall(getCurrentUser(), versionId, descriptor);
     }
 
     @PreAuthorize("hasAuthority('TENANT_ADMIN')")

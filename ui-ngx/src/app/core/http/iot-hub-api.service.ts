@@ -112,6 +112,18 @@ export class IotHubApiService {
     );
   }
 
+  public registerDeviceInstall(
+    versionId: string,
+    descriptor: { createdEntityIds: { entityType: string; id: string }[]; dashboardId?: { id: string } },
+    config?: IotHubRequestConfig
+  ): Observable<InstallItemVersionResult> {
+    return this.http.post<InstallItemVersionResult>(
+      `/api/iot-hub/device/register?versionId=${versionId}`,
+      descriptor,
+      { params: this.buildParams(config) }
+    );
+  }
+
   public installItemVersion(versionId: string, config?: IotHubRequestConfig, data?: any): Observable<InstallItemVersionResult> {
     return this.http.post<InstallItemVersionResult>(
       `/api/iot-hub/versions/${versionId}/install`,
