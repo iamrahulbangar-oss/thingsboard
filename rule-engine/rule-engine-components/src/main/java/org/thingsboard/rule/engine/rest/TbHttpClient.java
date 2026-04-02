@@ -320,8 +320,10 @@ public class TbHttpClient {
                 continue; // slot released — loop to check if there's a valid next item
             }
             dispatchedCount.incrementAndGet();
-            doHttpCall(next);
-            return; // slot is now owned by doHttpCall; its callback will call tryProcess()
+            if (doHttpCall(next)) {
+                return; // async HTTP call started — its callback will call tryProcess()
+            }
+            // synchronous failure — semaphore already released in doHttpCall, loop to try next task
         }
     }
 
@@ -341,7 +343,17 @@ public class TbHttpClient {
                 queueSize, queueRemaining);
     }
 
-    private void doHttpCall(PendingTask task) {
+    /**
+     * Initiates an async HTTP call for the given task.
+     *
+     * @return {@code true} if the async subscription was started and the semaphore slot is now
+     *         owned by the callback (which will release it and call {@link #tryProcess()}).
+     *         {@code false} if a synchronous exception occurred before the subscription was
+     *         registered; the semaphore slot has already been released and the caller should
+     *         loop rather than recurse to avoid stack overflow when many queued tasks fail
+     *         synchronously (e.g. misconfigured URL pattern).
+     */
+    private boolean doHttpCall(PendingTask task) {
         try {
             String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), task.msg());
             HttpMethod method = HttpMethod.valueOf(config.getRequestMethod());
@@ -381,13 +393,17 @@ public class TbHttpClient {
                             tryProcess();
                         }
                     });
+            return true;
         } catch (Exception e) {
             failureCount.incrementAndGet();
             task.onFailure().accept(processException(task.msg(), e), processThrowable(e));
             if (semaphore != null) {
                 semaphore.release();
-                tryProcess();
+                // Do NOT call tryProcess() here — when invoked from tryProcess(), the caller
+                // loops back iteratively. When invoked directly (no semaphore path), there is
+                // no queue to drain.
             }
+            return false;
         }
     }
 
