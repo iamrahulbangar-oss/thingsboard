@@ -567,6 +567,13 @@ actors:
       # Use this when your rule chains need to reach devices on private networks (e.g., 192.168.1.0/24).
       # Example: "192.168.1.0/24,10.0.0.0/8,my-internal-service.corp"
       ssrf_allowed_hosts: "${SSRF_ALLOWED_HOSTS:}"
+      rest_api_call:
+        # Server-level ceiling for the number of parallel in-flight HTTP requests per REST API Call rule node instance.
+        # Applied as min(nodeConfig, systemMax) when set; 0 = no system-level restriction (node config wins).
+        max_parallel_requests: "${ACTORS_RULE_EXTERNAL_REST_API_CALL_MAX_PARALLEL_REQUESTS:0}"
+        # Server-level ceiling for the pending-request queue depth per REST API Call rule node instance.
+        # Applied as min(nodeConfig, systemMax) when set; 0 = no system-level restriction.
+        max_pending_requests: "${ACTORS_RULE_EXTERNAL_REST_API_CALL_MAX_PENDING_REQUESTS:0}"
   rpc:
     # Maximum number of persistent RPC call retries in case of failed request delivery.
     max_retries: "${ACTORS_RPC_MAX_RETRIES:5}"

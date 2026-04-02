@@ -37,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.thingsboard.common.util.DirectListeningExecutor;
 import org.thingsboard.common.util.JacksonUtil;
 import org.thingsboard.rule.engine.AbstractRuleNodeUpgradeTest;
+import org.thingsboard.rule.engine.api.RestApiCallNodeSettings;
 import org.thingsboard.rule.engine.api.TbContext;
 import org.thingsboard.rule.engine.api.TbNode;
 import org.thingsboard.rule.engine.api.TbNodeConfiguration;
@@ -303,56 +304,56 @@ public class TbRestApiCallNodeTest extends AbstractRuleNodeUpgradeTest {
 
     @Test
     public void givenMaxPendingRequestsExceeded_whenOnMsg_thenFailsImmediatelyAndQueuedRequestFiresAfterSlotOpens() throws IOException, InterruptedException {
-        System.setProperty(TbHttpClient.MAX_PENDING_REQUESTS_ENV, "1");
-        try {
-            CountDownLatch releaseResponse = new CountDownLatch(1);
-            setupServer("*", (request, response, context) -> {
-                try {
-                    releaseResponse.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                response.setStatusCode(200);
-            });
+        CountDownLatch releaseResponse = new CountDownLatch(1);
+        setupServer("*", (request, response, context) -> {
+            try {
+                releaseResponse.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            response.setStatusCode(200);
+        });
 
-            given(ctx.isExternalNodeForceAck()).willReturn(false);
-            given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
-            TbMsg transformedMsg = TbMsg.newMsg()
-                    .type(TbMsgType.POST_TELEMETRY_REQUEST)
-                    .originator(originator)
-                    .copyMetaData(metaData)
-                    .data(TbMsg.EMPTY_JSON_OBJECT)
-                    .build();
-            given(ctx.transformMsg(any(), any(), any())).willReturn(transformedMsg);
+        given(ctx.isExternalNodeForceAck()).willReturn(false);
+        given(ctx.getExternalCallExecutor()).willReturn(DirectListeningExecutor.INSTANCE);
+        // Simulate server-level cap: maxPendingRequests=1 via RestApiCallNodeSettings
+        given(ctx.getRestApiCallNodeSettings()).willReturn(new RestApiCallNodeSettings() {
+            @Override public int getMaxParallelRequests() { return 0; }
+            @Override public int getMaxPendingRequests() { return 1; }
+        });
+        TbMsg transformedMsg = TbMsg.newMsg()
+                .type(TbMsgType.POST_TELEMETRY_REQUEST)
+                .originator(originator)
+                .copyMetaData(metaData)
+                .data(TbMsg.EMPTY_JSON_OBJECT)
+                .build();
+        given(ctx.transformMsg(any(), any(), any())).willReturn(transformedMsg);
 
-            TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
-            config.setMaxParallelRequestsCount(1);
-            config.setRequestMethod("GET");
-            config.setIgnoreRequestBody(true);
-            config.setRestEndpointUrlPattern(String.format("http://localhost:%d/path", server.getLocalPort()));
-            initWithConfig(config);
+        TbRestApiCallNodeConfiguration config = new TbRestApiCallNodeConfiguration().defaultConfiguration();
+        config.setMaxParallelRequestsCount(1);
+        config.setRequestMethod("GET");
+        config.setIgnoreRequestBody(true);
+        config.setRestEndpointUrlPattern(String.format("http://localhost:%d/path", server.getLocalPort()));
+        initWithConfig(config);
 
-            TbMsg msg1 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
-                    .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
-                    .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
-            TbMsg msg2 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
-                    .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
-                    .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
-            TbMsg msg3 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
-                    .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
-                    .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+        TbMsg msg1 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+        TbMsg msg2 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
+        TbMsg msg3 = TbMsg.newMsg().type(TbMsgType.POST_TELEMETRY_REQUEST).originator(originator)
+                .copyMetaData(metaData).dataType(TbMsgDataType.JSON).data(TbMsg.EMPTY_JSON_OBJECT)
+                .ruleChainId(ruleChainId).ruleNodeId(ruleNodeId).build();
 
-            restNode.onMsg(ctx, msg1);  // fires immediately (semaphore acquired)
-            restNode.onMsg(ctx, msg2);  // queues (semaphore exhausted, queue has room)
-            restNode.onMsg(ctx, msg3);  // fails immediately (queue full — capped by TB_RE_HTTP_CLIENT_MAX_PENDING_REQUESTS=1)
+        restNode.onMsg(ctx, msg1);  // fires immediately (semaphore acquired)
+        restNode.onMsg(ctx, msg2);  // queues (semaphore exhausted, queue has room)
+        restNode.onMsg(ctx, msg3);  // fails immediately (queue full — server-level maxPendingRequests=1)
 
-            verify(ctx, timeout(1000)).tellFailure(any(), any());
+        verify(ctx, timeout(1000)).tellFailure(any(), any());
 
-            releaseResponse.countDown();
-            verify(ctx, timeout(5000).times(2)).tellSuccess(any());
-        } finally {
-            System.clearProperty(TbHttpClient.MAX_PENDING_REQUESTS_ENV);
-        }
+        releaseResponse.countDown();
+        verify(ctx, timeout(5000).times(2)).tellSuccess(any());
     }
 
     private static Stream<Arguments> givenFromVersionAndConfig_whenUpgrade_thenVerifyHasChangesAndConfig() {

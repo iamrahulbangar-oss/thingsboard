@@ -438,4 +438,10 @@ public interface TbContext {
 
     MqttClientSettings getMqttClientSettings();
 
+    // Server-level safety caps for the REST API Call rule node (read from thingsboard.yml)
+
+    default RestApiCallNodeSettings getRestApiCallNodeSettings() {
+        return RestApiCallNodeSettings.DEFAULT;
+    }
+
 }

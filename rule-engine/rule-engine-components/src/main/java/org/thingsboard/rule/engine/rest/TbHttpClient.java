@@ -33,6 +33,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import org.springframework.web.util.UriComponentsBuilder;
 import org.thingsboard.common.util.JacksonUtil;
 import org.thingsboard.common.util.SsrfProtectionValidator;
+import org.thingsboard.rule.engine.api.RestApiCallNodeSettings;
 import org.thingsboard.rule.engine.api.TbContext;
 import org.thingsboard.rule.engine.api.TbNodeException;
 import org.thingsboard.rule.engine.api.util.TbNodeUtils;
@@ -87,8 +88,6 @@ public class TbHttpClient {
     public static final String PROXY_PASSWORD = "tb.proxy.password";
 
     public static final String MAX_IN_MEMORY_BUFFER_SIZE_IN_KB = "tb.http.maxInMemoryBufferSizeInKb";
-    public static final String MAX_PENDING_REQUESTS_ENV  = "TB_RE_HTTP_CLIENT_MAX_PENDING_REQUESTS";
-    public static final String MAX_PARALLEL_REQUESTS_ENV = "TB_RE_HTTP_CLIENT_MAX_PARALLEL_REQUESTS";
 
     private static final long ANOMALY_REPORT_INTERVAL_MS = 60_000;
 
@@ -116,18 +115,19 @@ public class TbHttpClient {
             long enqueuedNanos) {}
 
     TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared) throws TbNodeException {
-        this(config, eventLoopGroupShared, "n/a", "n/a");
+        this(config, eventLoopGroupShared, "n/a", "n/a", RestApiCallNodeSettings.DEFAULT);
     }
 
-    TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared, String tenantId, String nodeId) throws TbNodeException {
+    TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared,
+                 String tenantId, String nodeId, RestApiCallNodeSettings settings) throws TbNodeException {
         try {
             this.config = config;
             this.tenantId = tenantId;
             this.nodeId = nodeId;
-            int effectiveParallel = getEffectiveMaxParallelRequests();
+            int effectiveParallel = effectiveMax(config.getMaxParallelRequestsCount(), settings.getMaxParallelRequests());
             if (effectiveParallel > 0) {
                 semaphore = new Semaphore(effectiveParallel);
-                int effectivePending = getEffectiveMaxPendingRequests();
+                int effectivePending = effectiveMax(0, settings.getMaxPendingRequests());
                 pendingQueue = effectivePending > 0 ? new LinkedBlockingQueue<>(effectivePending) : new LinkedBlockingQueue<>();
             }
 
@@ -189,28 +189,15 @@ public class TbHttpClient {
         }
     }
 
-    private int getEffectiveMaxParallelRequests() {
-        int userMax = config.getMaxParallelRequestsCount();
-        String value = System.getenv(MAX_PARALLEL_REQUESTS_ENV);
-        if (value == null) {
-            value = System.getProperty(MAX_PARALLEL_REQUESTS_ENV);
-        }
-        if (value == null) {
-            return userMax; // 0 = unlimited (no semaphore)
-        }
-        int systemMax = Integer.parseInt(value);
-        if (userMax <= 0) {
-            return systemMax; // user left it unlimited → apply system ceiling
-        }
+    /**
+     * Returns the effective limit: {@code min(userMax, systemMax)} when both are positive,
+     * {@code systemMax} when only the system ceiling is set, or {@code userMax} otherwise.
+     * A value of {@code 0} means unlimited.
+     */
+    private static int effectiveMax(int userMax, int systemMax) {
+        if (systemMax <= 0) return userMax;
+        if (userMax <= 0)   return systemMax;
         return Math.min(userMax, systemMax);
-    }
-
-    private int getEffectiveMaxPendingRequests() {
-        String value = System.getenv(MAX_PENDING_REQUESTS_ENV);
-        if (value == null) {
-            value = System.getProperty(MAX_PENDING_REQUESTS_ENV); // system property as fallback (tests / JVM flags)
-        }
-        return value != null ? Integer.parseInt(value) : 0; // 0 = unbounded
     }
 
     private int getPoolMaxConnections() {
