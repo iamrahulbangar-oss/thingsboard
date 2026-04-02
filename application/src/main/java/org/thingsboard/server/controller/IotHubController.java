@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
 import org.thingsboard.server.common.data.exception.ThingsboardException;
+import org.thingsboard.common.util.JacksonUtil;
 import org.thingsboard.server.common.data.iot_hub.DeviceInstalledItemDescriptor;
 import org.thingsboard.server.common.data.iot_hub.IotHubInstalledItem;
 import org.thingsboard.server.common.data.page.PageData;
@@ -70,7 +71,8 @@ public class IotHubController extends BaseController {
     @ResponseBody
     public InstallItemVersionResult registerDeviceInstall(
             @RequestParam String versionId,
-            @RequestBody DeviceInstalledItemDescriptor descriptor) throws ThingsboardException {
+            @RequestBody JsonNode body) throws ThingsboardException {
+        DeviceInstalledItemDescriptor descriptor = JacksonUtil.treeToValue(body, DeviceInstalledItemDescriptor.class);
         return iotHubService.registerDeviceInstall(getCurrentUser(), versionId, descriptor);
     }
 
