@@ -114,12 +114,12 @@ export class IotHubApiService {
 
   public registerDeviceInstall(
     versionId: string,
-    descriptor: { createdEntityIds: { entityType: string; id: string }[]; dashboardId?: { id: string } },
+    descriptor: { type?: string; createdEntityIds: { entityType: string; id: string }[]; dashboardId?: { id: string } },
     config?: IotHubRequestConfig
   ): Observable<InstallItemVersionResult> {
     return this.http.post<InstallItemVersionResult>(
       `/api/iot-hub/device/register?versionId=${versionId}`,
-      descriptor,
+      { type: 'DEVICE', ...descriptor },
       { params: this.buildParams(config) }
     );
   }
