@@ -236,7 +236,7 @@ public class TbHttpClient {
     }
 
     /**
-     * Tries to acquire one concurrency slot and fire the next queued request.
+     * Tries to acquire one concurrency slot and fire the next queued task.
      * Stale messages (whose message pack has expired) are silently dropped.
      * Safe to call from any thread under high concurrency.
      */
@@ -261,45 +261,45 @@ public class TbHttpClient {
         }
     }
 
-    private void doHttpCall(PendingTask request) {
+    private void doHttpCall(PendingTask task) {
         try {
-            String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), request.msg());
+            String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), task.msg());
             HttpMethod method = HttpMethod.valueOf(config.getRequestMethod());
             URI uri = buildEncodedUri(endpointUrl);
 
             RequestBodySpec req = webClient
                     .method(method)
                     .uri(uri)
-                    .headers(headers -> prepareHeaders(headers, request.msg()));
+                    .headers(headers -> prepareHeaders(headers, task.msg()));
 
             if ((HttpMethod.POST.equals(method) || HttpMethod.PUT.equals(method) ||
                     HttpMethod.PATCH.equals(method) || HttpMethod.DELETE.equals(method)) &&
                     !config.isIgnoreRequestBody()) {
-                req.body(BodyInserters.fromValue(getData(request.msg(), config.isParseToPlainText())));
+                req.body(BodyInserters.fromValue(getData(task.msg(), config.isParseToPlainText())));
             }
 
             req.retrieve()
                     .toEntity(String.class)
-                    .publishOn(Schedulers.fromExecutor(request.ctx().getExternalCallExecutor()))
+                    .publishOn(Schedulers.fromExecutor(task.ctx().getExternalCallExecutor()))
                     .subscribe(responseEntity -> {
                         if (responseEntity.getStatusCode().is2xxSuccessful()) {
-                            request.onSuccess().accept(processResponse(request.ctx(), request.msg(), responseEntity));
+                            task.onSuccess().accept(processResponse(task.ctx(), task.msg(), responseEntity));
                         } else {
-                            request.onFailure().accept(processFailureResponse(request.msg(), responseEntity), null);
+                            task.onFailure().accept(processFailureResponse(task.msg(), responseEntity), null);
                         }
                         if (semaphore != null) {
                             semaphore.release();
                             tryProcess();
                         }
                     }, throwable -> {
-                        request.onFailure().accept(processException(request.msg(), throwable), processThrowable(throwable));
+                        task.onFailure().accept(processException(task.msg(), throwable), processThrowable(throwable));
                         if (semaphore != null) {
                             semaphore.release();
                             tryProcess();
                         }
                     });
         } catch (Exception e) {
-            request.onFailure().accept(processException(request.msg(), e), processThrowable(e));
+            task.onFailure().accept(processException(task.msg(), e), processThrowable(e));
             if (semaphore != null) {
                 semaphore.release();
                 tryProcess();
