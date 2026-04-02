@@ -87,7 +87,8 @@ public class TbHttpClient {
     public static final String PROXY_PASSWORD = "tb.proxy.password";
 
     public static final String MAX_IN_MEMORY_BUFFER_SIZE_IN_KB = "tb.http.maxInMemoryBufferSizeInKb";
-    public static final String MAX_PENDING_REQUESTS_ENV = "TB_RE_HTTP_CLIENT_MAX_PENDING_REQUESTS";
+    public static final String MAX_PENDING_REQUESTS_ENV  = "TB_RE_HTTP_CLIENT_MAX_PENDING_REQUESTS";
+    public static final String MAX_PARALLEL_REQUESTS_ENV = "TB_RE_HTTP_CLIENT_MAX_PARALLEL_REQUESTS";
 
     private static final long ANOMALY_REPORT_INTERVAL_MS = 60_000;
 
@@ -123,10 +124,11 @@ public class TbHttpClient {
             this.config = config;
             this.tenantId = tenantId;
             this.nodeId = nodeId;
-            if (config.getMaxParallelRequestsCount() > 0) {
-                semaphore = new Semaphore(config.getMaxParallelRequestsCount());
-                int effectiveMax = getEffectiveMaxPendingRequests();
-                pendingQueue = effectiveMax > 0 ? new LinkedBlockingQueue<>(effectiveMax) : new LinkedBlockingQueue<>();
+            int effectiveParallel = getEffectiveMaxParallelRequests();
+            if (effectiveParallel > 0) {
+                semaphore = new Semaphore(effectiveParallel);
+                int effectivePending = getEffectiveMaxPendingRequests();
+                pendingQueue = effectivePending > 0 ? new LinkedBlockingQueue<>(effectivePending) : new LinkedBlockingQueue<>();
             }
 
             ConnectionProvider connectionProvider = ConnectionProvider
@@ -185,6 +187,22 @@ public class TbHttpClient {
         } catch (SSLException e) {
             throw new TbNodeException(e);
         }
+    }
+
+    private int getEffectiveMaxParallelRequests() {
+        int userMax = config.getMaxParallelRequestsCount();
+        String value = System.getenv(MAX_PARALLEL_REQUESTS_ENV);
+        if (value == null) {
+            value = System.getProperty(MAX_PARALLEL_REQUESTS_ENV);
+        }
+        if (value == null) {
+            return userMax; // 0 = unlimited (no semaphore)
+        }
+        int systemMax = Integer.parseInt(value);
+        if (userMax <= 0) {
+            return systemMax; // user left it unlimited → apply system ceiling
+        }
+        return Math.min(userMax, systemMax);
     }
 
     private int getEffectiveMaxPendingRequests() {
