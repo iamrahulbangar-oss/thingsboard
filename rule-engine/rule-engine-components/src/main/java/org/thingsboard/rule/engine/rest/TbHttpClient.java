@@ -188,16 +188,11 @@ public class TbHttpClient {
     }
 
     private int getEffectiveMaxPendingRequests() {
-        int userMax = config.getMaxPendingRequests();
-        String envValue = System.getenv(MAX_PENDING_REQUESTS_ENV);
-        if (envValue == null) {
-            return userMax; // 0 = unbounded; no system ceiling configured
+        String value = System.getenv(MAX_PENDING_REQUESTS_ENV);
+        if (value == null) {
+            value = System.getProperty(MAX_PENDING_REQUESTS_ENV); // system property as fallback (tests / JVM flags)
         }
-        int systemMax = Integer.parseInt(envValue);
-        if (userMax <= 0) {
-            return systemMax; // user left it unlimited → apply system ceiling
-        }
-        return Math.min(userMax, systemMax); // honour the lower of the two
+        return value != null ? Integer.parseInt(value) : 0; // 0 = unbounded
     }
 
     private int getPoolMaxConnections() {
