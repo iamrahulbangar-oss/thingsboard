@@ -498,12 +498,12 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     return ids;
   }
 
-  private findCreatedDashboardId(): { id: string } | undefined {
+  private findCreatedDashboardId(): { entityType: string; id: string } | undefined {
     for (const ws of this.wizardSteps) {
       if (ws.type === 'progress' && ws.entitySteps) {
         for (const ep of ws.entitySteps) {
           if (ep.step.type === InstallStepType.DASHBOARD && ep.status === 'success' && ep.entityOutput) {
-            return { id: ep.entityOutput.id };
+            return { entityType: 'DASHBOARD', id: ep.entityOutput.id };
           }
         }
       }
