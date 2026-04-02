@@ -43,6 +43,13 @@ interface IotHubInstalledItemRepository extends JpaRepository<IotHubInstalledIte
             """)
     Page<IotHubInstalledItemEntity> findByTenantId(@Param("tenantId") UUID tenantId, @Param("itemType") String itemType, @Param("textSearch") String textSearch, Pageable pageable);
 
+    @Query("""
+            SELECT COUNT(item) FROM IotHubInstalledItemEntity item
+            WHERE item.tenantId = :tenantId
+              AND (:itemType IS NULL OR item.itemType = :itemType)
+            """)
+    long countByTenantId(@Param("tenantId") UUID tenantId, @Param("itemType") String itemType);
+
     @Transactional
     @Modifying
     @Query(value = "DELETE FROM iot_hub_installed_item WHERE tenant_id = :tenantId", nativeQuery = true)

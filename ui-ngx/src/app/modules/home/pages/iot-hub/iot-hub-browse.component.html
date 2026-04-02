@@ -15,214 +15,235 @@
     limitations under the License.
 
 -->
-<div class="tb-iot-hub-browse-container" [class.embedded]="embedded">
-  <!-- Page header -->
-  @if (!embedded) {
-    <div class="tb-iot-hub-browse-header">
-      <div>
-        <h1>{{ getTitle() | translate }}</h1>
-        <p>{{ getSubtitle() | translate }}</p>
-      </div>
-      <button mat-stroked-button color="primary" (click)="navigateToInstalledItems()">
-        <mat-icon>inventory_2</mat-icon>
-        {{ 'iot-hub.installed-items' | translate }}
-      </button>
-    </div>
-  }
-
+<div class="tb-iot-hub-browse" [class.embedded]="embedded" [class.tabs-hidden]="hideTabs">
   <!-- Type tabs -->
-  <nav mat-tab-nav-bar class="tb-iot-hub-type-tabs" [tabPanel]="tabPanel">
+  <nav mat-tab-nav-bar class="tb-iot-hub-tabs" [tabPanel]="tabPanel" [class.hidden]="hideTabs">
     <a mat-tab-link
        [active]="activeType === ItemType.WIDGET"
        (click)="onTypeTabChange(ItemType.WIDGET)">
-      {{ 'item.type-widget' | translate }}s
+      {{ 'item.type-widget-plural' | translate }}
     </a>
     <a mat-tab-link
        [active]="activeType === ItemType.DASHBOARD"
        (click)="onTypeTabChange(ItemType.DASHBOARD)">
-      {{ 'item.type-dashboard' | translate }}s
+      {{ 'item.type-dashboard-plural' | translate }}
     </a>
     <a mat-tab-link
        [active]="activeType === ItemType.SOLUTION_TEMPLATE"
        (click)="onTypeTabChange(ItemType.SOLUTION_TEMPLATE)">
-      {{ 'item.type-solution-template' | translate }}s
+      {{ 'item.type-solution-template-plural' | translate }}
     </a>
     <a mat-tab-link
        [active]="activeType === ItemType.CALCULATED_FIELD"
        (click)="onTypeTabChange(ItemType.CALCULATED_FIELD)">
-      {{ 'item.type-calculated-field' | translate }}s
+      {{ 'item.type-calculated-field-plural' | translate }}
     </a>
     <a mat-tab-link
        [active]="activeType === ItemType.RULE_CHAIN"
        (click)="onTypeTabChange(ItemType.RULE_CHAIN)">
-      {{ 'item.type-rule-chain' | translate }}s
+      {{ 'item.type-rule-chain-plural' | translate }}
     </a>
     <a mat-tab-link
        [active]="activeType === ItemType.DEVICE"
        (click)="onTypeTabChange(ItemType.DEVICE)">
-      {{ 'item.type-device' | translate }}s
+      {{ 'item.type-device-plural' | translate }}
     </a>
   </nav>
   <mat-tab-nav-panel #tabPanel></mat-tab-nav-panel>
 
-  <!-- Search + sort row -->
-  <div class="tb-iot-hub-search-row">
-    <mat-form-field appearance="outline" class="tb-iot-hub-search-field">
-      <mat-icon matPrefix>search</mat-icon>
-      <input matInput
-             [placeholder]="getSearchPlaceholder() | translate"
-             [value]="textSearch"
-             (input)="onSearchChange($any($event.target).value)">
-      @if (textSearch) {
-        <button matSuffix mat-icon-button (click)="onSearchChange('')">
-          <mat-icon>close</mat-icon>
-        </button>
-      }
-    </mat-form-field>
-    <mat-form-field appearance="outline" class="tb-iot-hub-sort-field">
-      <mat-select [value]="selectedSortIndex" (selectionChange)="onSortChange($event.value)">
-        @for (option of sortOptions; track option.value; let i = $index) {
-          <mat-option [value]="i">{{ option.label | translate }}</mat-option>
+  <!-- Content: filters sidebar + card grid -->
+  <div class="tb-iot-hub-content">
+    <!-- Left sidebar filters -->
+    <div class="tb-iot-hub-filters">
+      <div class="tb-iot-hub-filters-wrapper">
+      <div class="tb-iot-hub-filters-inner">
+        @if (getSubtypeMap(); as subtypeMap) {
+          <mat-expansion-panel [expanded]="true" class="tb-iot-hub-filter-panel">
+            <mat-expansion-panel-header>
+              <mat-panel-title>{{ 'iot-hub.type-filter-label' | translate }}</mat-panel-title>
+            </mat-expansion-panel-header>
+            @for (entry of subtypeMap | keyvalue; track entry.key) {
+              <mat-checkbox [checked]="isSubtypeActive(entry.key)"
+                            (change)="onSubtypeToggle(entry.key)">
+                {{ entry.value | translate }}
+              </mat-checkbox>
+            }
+          </mat-expansion-panel>
         }
-      </mat-select>
-    </mat-form-field>
-  </div>
 
-  <!-- Filter dropdowns row -->
-  <div class="tb-iot-hub-filter-row">
-    @if (getSubtypeMap(); as subtypeMap) {
-      <mat-form-field appearance="outline" class="tb-iot-hub-filter-select">
-        <mat-select [value]="getActiveSubtypesArray()" multiple
-                    [placeholder]="'iot-hub.type-filter-label' | translate"
-                    (selectionChange)="onSubtypesChange($event.value)">
-          @for (entry of subtypeMap | keyvalue; track entry.key) {
-            <mat-option [value]="entry.key">{{ entry.value | translate }}</mat-option>
+        @if (categories.size > 0) {
+          @if (getSubtypeMap()) {
+            <div class="tb-iot-hub-filter-divider"></div>
           }
-        </mat-select>
-      </mat-form-field>
-    }
-    @if (categories.size > 0) {
-      <mat-form-field appearance="outline" class="tb-iot-hub-filter-select">
-        <mat-select [value]="getActiveCategoriesArray()" multiple
-                    [placeholder]="'iot-hub.category' | translate"
-                    (selectionChange)="onCategoriesChange($event.value)">
-          @for (entry of categories | keyvalue; track entry.key) {
-            <mat-option [value]="entry.key">{{ entry.value | translate }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    }
-    <mat-form-field appearance="outline" class="tb-iot-hub-filter-select">
-      <mat-select [value]="getActiveUseCasesArray()" multiple
-                  [placeholder]="'iot-hub.use-case' | translate"
-                  (selectionChange)="onUseCasesChange($event.value)">
-        @for (entry of useCases | keyvalue; track entry.key) {
-          <mat-option [value]="entry.key">{{ entry.value | translate }}</mat-option>
+          <mat-expansion-panel [expanded]="true" class="tb-iot-hub-filter-panel">
+            <mat-expansion-panel-header>
+              <mat-panel-title>{{ 'iot-hub.category' | translate }}</mat-panel-title>
+            </mat-expansion-panel-header>
+            @for (entry of categories | keyvalue; track entry.key) {
+              <mat-checkbox [checked]="isCategoryActive(entry.key)"
+                            (change)="onCategoryToggle(entry.key)">
+                {{ entry.value | translate }}
+              </mat-checkbox>
+            }
+          </mat-expansion-panel>
         }
-      </mat-select>
-    </mat-form-field>
-  </div>
 
-  <!-- Active filter chips -->
-  @if (hasActiveDropdownFilters()) {
-    <div class="tb-iot-hub-active-filters">
-      @for (key of getActiveSubtypesArray(); track key) {
-        <span class="tb-iot-hub-active-chip" (click)="onSubtypeToggle(key)">
-          {{ getSubtypeLabel(key) }}
-          <mat-icon>close</mat-icon>
+        @if (getSubtypeMap() || categories.size > 0) {
+          <div class="tb-iot-hub-filter-divider"></div>
+        }
+        <mat-expansion-panel [expanded]="false" class="tb-iot-hub-filter-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>{{ 'iot-hub.use-case' | translate }}</mat-panel-title>
+          </mat-expansion-panel-header>
+          @for (entry of useCases | keyvalue; track entry.key) {
+            <mat-checkbox [checked]="isUseCaseActive(entry.key)"
+                          (change)="onUseCaseToggle(entry.key)">
+              {{ entry.value | translate }}
+            </mat-checkbox>
+          }
+        </mat-expansion-panel>
+      </div>
+      </div>
+    </div>
+
+    <!-- Right content area -->
+    <div class="tb-iot-hub-results">
+      <!-- Top bar: results count + search + sort -->
+      <div class="tb-iot-hub-results-top">
+        <span class="tb-iot-hub-results-count">
+          {{ 'iot-hub.results-count' | translate:{ count: totalElements } }}
         </span>
-      }
-      @for (key of getActiveCategoriesArray(); track key) {
-        <span class="tb-iot-hub-active-chip" (click)="onCategoryToggle(key)">
-          {{ getCategoryLabel(key) }}
-          <mat-icon>close</mat-icon>
-        </span>
-      }
-      @for (key of getActiveUseCasesArray(); track key) {
-        <span class="tb-iot-hub-active-chip" (click)="onUseCaseToggle(key)">
-          {{ getUseCaseLabel(key) }}
-          <mat-icon>close</mat-icon>
-        </span>
-      }
-      <button class="tb-iot-hub-clear-filters" (click)="clearAllFilters()">
-        {{ 'iot-hub.clear-all-filters' | translate }}
-      </button>
-    </div>
-  }
+        <div class="tb-iot-hub-search-field">
+          <mat-icon class="tb-iot-hub-search-icon">search</mat-icon>
+          <input class="tb-iot-hub-search-input"
+                 [placeholder]="'iot-hub.search' | translate"
+                 [value]="textSearch"
+                 (input)="onSearchChange($any($event.target).value)">
+          @if (textSearch) {
+            <button mat-icon-button class="tb-iot-hub-search-clear" (click)="onSearchChange('')">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </div>
+      </div>
 
-  <!-- Results count -->
-  @if (!isLoading && !hasError) {
-    <div class="tb-iot-hub-results-count">
-      {{ 'iot-hub.results-count' | translate:{ count: totalElements } }}
-    </div>
-  }
-
-  <!-- Loading -->
-  @if (isLoading) {
-    <div class="tb-iot-hub-loading">
-      <mat-spinner diameter="40"></mat-spinner>
-    </div>
-  }
-
-  <!-- Error -->
-  @if (hasError && !isLoading) {
-    <div class="tb-iot-hub-empty-state">
-      <mat-icon class="tb-iot-hub-empty-icon">error_outline</mat-icon>
-      <h3>{{ 'iot-hub.unable-to-load' | translate }}</h3>
-      <p>{{ 'iot-hub.unable-to-load-text' | translate }}</p>
-      <button mat-raised-button color="primary" (click)="loadItems()">
-        {{ 'iot-hub.retry' | translate }}
-      </button>
-    </div>
-  }
-
-  <!-- Empty state -->
-  @if (!isLoading && !hasError && items.length === 0) {
-    <div class="tb-iot-hub-empty-state">
-      <mat-icon class="tb-iot-hub-empty-icon">search_off</mat-icon>
-      <h3>{{ 'iot-hub.no-items-found' | translate }}</h3>
-      <p>{{ 'iot-hub.no-items-found-text' | translate }}</p>
-      @if (hasActiveFilters()) {
-        <button mat-raised-button color="primary" (click)="clearAllFilters()">
-          {{ 'iot-hub.clear-all-filters' | translate }}
+      <!-- Sort button -->
+      <div class="tb-iot-hub-sort-row">
+        <!-- Active filter chips -->
+        @if (hasActiveDropdownFilters()) {
+          <mat-chip-set class="tb-iot-hub-active-filters">
+            @for (key of getActiveSubtypesArray(); track key) {
+              <mat-chip (removed)="onSubtypeToggle(key)">
+                {{ getSubtypeLabel(key) }}
+                <mat-icon matChipRemove>close</mat-icon>
+              </mat-chip>
+            }
+            @for (key of getActiveCategoriesArray(); track key) {
+              <mat-chip (removed)="onCategoryToggle(key)">
+                {{ getCategoryLabel(key) }}
+                <mat-icon matChipRemove>close</mat-icon>
+              </mat-chip>
+            }
+            @for (key of getActiveUseCasesArray(); track key) {
+              <mat-chip (removed)="onUseCaseToggle(key)">
+                {{ getUseCaseLabel(key) }}
+                <mat-icon matChipRemove>close</mat-icon>
+              </mat-chip>
+            }
+          </mat-chip-set>
+          <button class="tb-iot-hub-clear-btn" (click)="clearAllFilters()">
+            {{ 'iot-hub.clear-all' | translate }}
+          </button>
+        }
+        <span class="tb-iot-hub-sort-spacer"></span>
+        <button mat-button class="tb-iot-hub-sort-btn" [matMenuTriggerFor]="sortMenu">
+          <mat-icon>filter_list</mat-icon>
+          {{ sortOptions[selectedSortIndex].label | translate }}
         </button>
+        <mat-menu #sortMenu="matMenu">
+          @for (option of sortOptions; track option.value; let i = $index) {
+            <button mat-menu-item (click)="onSortChange(i)">{{ option.label | translate }}</button>
+          }
+        </mat-menu>
+      </div>
+
+      <!-- Loading -->
+      @if (isLoading) {
+        <div class="tb-iot-hub-loading">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      }
+
+      <!-- Error -->
+      @if (hasError && !isLoading) {
+        <div class="tb-iot-hub-empty-state">
+          <mat-icon class="tb-iot-hub-empty-icon">error_outline</mat-icon>
+          <h3>{{ 'iot-hub.unable-to-load' | translate }}</h3>
+          <p>{{ 'iot-hub.unable-to-load-text' | translate }}</p>
+          <button mat-flat-button color="primary" (click)="loadItems()">
+            {{ 'iot-hub.retry' | translate }}
+          </button>
+        </div>
+      }
+
+      <!-- Empty state -->
+      @if (!isLoading && !hasError && items.length === 0) {
+        <div class="tb-iot-hub-empty-state">
+          <mat-icon class="tb-iot-hub-empty-icon">search_off</mat-icon>
+          <h3>{{ 'iot-hub.no-items-found' | translate }}</h3>
+          <p>{{ 'iot-hub.no-items-found-text' | translate }}</p>
+          @if (hasActiveFilters()) {
+            <button mat-flat-button color="primary" (click)="clearAllFilters()">
+              {{ 'iot-hub.clear-all-filters' | translate }}
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Card grid -->
+      @if (!isLoading && !hasError && items.length > 0) {
+        <div class="tb-iot-hub-card-grid">
+          @for (item of items; track item.id) {
+            <tb-iot-hub-item-card
+              [item]="item"
+              [installedItem]="getInstalledItem(item)"
+              [showTypeChip]="false"
+              [showSubtype]="true"
+              [showCreator]="!creatorId"
+              (cardClick)="openItemDetail($event)"
+              (creatorClick)="navigateToCreator($event)"
+              (installClick)="installItem($event)"
+              (updateClick)="updateItem($event)"
+              (deleteClick)="deleteInstalledItem($event)">
+            </tb-iot-hub-item-card>
+          }
+        </div>
+
+        <!-- Pagination -->
+        <div class="tb-iot-hub-pagination">
+          <div class="tb-iot-hub-pagination-pages">
+            <button mat-icon-button [disabled]="pageIndex === 0" (click)="goToPage(pageIndex - 1)">
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+            @for (p of getPageNumbers(); track p) {
+              <button class="tb-iot-hub-page-btn" [class.active]="p === pageIndex" (click)="goToPage(p)">
+                {{ p + 1 }}
+              </button>
+            }
+            <button mat-icon-button [disabled]="pageIndex >= getTotalPages() - 1" (click)="goToPage(pageIndex + 1)">
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+          <div class="tb-iot-hub-pagination-size">
+            <span>{{ 'iot-hub.items-per-page' | translate }}:</span>
+            <mat-select [value]="pageSize" (selectionChange)="onPageSizeChange($event.value)" class="tb-iot-hub-page-size-select">
+              @for (size of pageSizeOptions; track size) {
+                <mat-option [value]="size">{{ size }}</mat-option>
+              }
+            </mat-select>
+          </div>
+        </div>
       }
     </div>
-  }
-
-  <!-- Card grid -->
-  @if (!isLoading && !hasError && items.length > 0) {
-    <div class="tb-iot-hub-card-grid">
-      @for (item of items; track item.id) {
-        <tb-iot-hub-item-card
-          [item]="item"
-          [installedItem]="getInstalledItem(item)"
-          [showTypeChip]="false"
-          [showCreator]="!creatorId"
-          (cardClick)="openItemDetail($event)"
-          (creatorClick)="navigateToCreator($event)"
-          (installClick)="installItem($event)"
-          (updateClick)="updateItem($event)">
-        </tb-iot-hub-item-card>
-      }
-    </div>
-
-    <!-- Pagination -->
-    <mat-paginator
-      [length]="totalElements"
-      [pageSize]="pageSize"
-      [pageIndex]="pageIndex"
-      [pageSizeOptions]="[12, 24, 48]"
-      (page)="onPageChange($event)">
-    </mat-paginator>
-  }
-
-  <!-- Footer -->
-  @if (!creatorId) {
-    <div class="tb-iot-hub-browse-footer">
-      <a class="tb-iot-hub-become-creator" href="https://iothub.thingsboard.io/signup" target="_blank">
-        {{ 'iot-hub.become-a-creator' | translate }}
-      </a>
-    </div>
-  }
+  </div>
 </div>

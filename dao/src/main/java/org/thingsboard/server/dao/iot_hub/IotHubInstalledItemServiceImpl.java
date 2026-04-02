@@ -56,6 +56,11 @@ class IotHubInstalledItemServiceImpl implements IotHubInstalledItemService {
     }
 
     @Override
+    public long countByTenantId(TenantId tenantId, String itemType) {
+        return iotHubInstalledItemDao.countByTenantId(tenantId, itemType);
+    }
+
+    @Override
     public void deleteById(TenantId tenantId, IotHubInstalledItemId id) {
         iotHubInstalledItemDao.removeById(tenantId, id.getId());
     }

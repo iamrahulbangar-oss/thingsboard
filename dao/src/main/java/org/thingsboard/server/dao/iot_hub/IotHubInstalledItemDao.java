@@ -30,6 +30,8 @@ public interface IotHubInstalledItemDao extends Dao<IotHubInstalledItem> {
 
     List<UUID> findInstalledItemIdsByTenantId(TenantId tenantId);
 
+    long countByTenantId(TenantId tenantId, String itemType);
+
     void deleteByTenantId(TenantId tenantId);
 
 }

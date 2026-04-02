@@ -14,390 +14,369 @@
  * limitations under the License.
  */
 
+@import "../../../../../scss/constants";
+
 :host {
+  display: block;
+}
+
+.tb-iot-hub-browse {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px 24px;
-  overflow: auto;
 
-  &.embedded {
-    padding: 0;
-    overflow: visible;
-    height: auto;
+  &.tabs-hidden {
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
   }
 }
 
-.tb-iot-hub-browse-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  background: white;
-  padding: 24px;
-  border-radius: 4px;
-  box-shadow: 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 1px rgba(0, 0, 0, 0.12);
+.hidden {
+  display: none !important;
+}
 
-  &.embedded {
-    max-width: none;
-    padding: 0;
-    border-radius: 0;
-    box-shadow: none;
-    background: transparent;
+// Tabs — Design: px-40, bottom border, labels auto-width (not stretched)
+.tb-iot-hub-tabs {
+  padding: 0 40px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+
+  .mat-mdc-tab-link {
+    min-width: auto;
+    flex: 0 0 auto;
   }
 }
 
-.tb-iot-hub-browse-header {
+// Two-column layout below tabs
+.tb-iot-hub-content {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
+  flex: 1;
+}
 
-  h1 {
-    font-size: 28px;
-    font-weight: 700;
-    margin: 0 0 4px;
+// Left sidebar filters — Design: 280px wide, right border, own scroll
+.tb-iot-hub-filters {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  position: relative;
+  padding-bottom: 48px;
+  margin-bottom: -48px;
+}
+
+.tb-iot-hub-filters-wrapper {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+
+.tb-iot-hub-filters-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 0;
+}
+
+// Filter divider between sections
+.tb-iot-hub-filter-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+// Filter expansion panels — Design: no shadow, pl-40 for content
+.tb-iot-hub-filter-panel.mat-expansion-panel {
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+
+  .mat-expansion-panel-header {
+    padding: 8px 16px 8px 56px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  ::ng-deep .mat-expansion-panel-header-title {
+    font-size: 14px;
+    font-weight: 500;
     color: rgba(0, 0, 0, 0.87);
   }
 
-  p {
-    font-size: 14px;
-    color: rgba(0, 0, 0, 0.54);
-    margin: 0;
-  }
-}
-
-.tb-iot-hub-type-tabs {
-  margin-bottom: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-
-  ::ng-deep {
-    .mat-mdc-tab-link-container {
-      flex-grow: 0;
-    }
-
-    .mat-mdc-tab-link {
-      text-transform: none;
-      font-weight: 400;
-      min-width: auto;
-      padding: 0 16px;
-      letter-spacing: normal;
-      height: 40px;
-      flex: 0 0 auto;
-    }
-
-    --mat-tab-active-indicator-color: #1976d2;
-
-    .mdc-tab__text-label {
-      color: rgba(0, 0, 0, 0.6);
-    }
-
-    .mdc-tab--active .mdc-tab__text-label {
-      font-weight: 500;
-    }
-
-    --mat-tab-active-label-text-color: #1976d2;
-    --mat-tab-active-focus-label-text-color: #1976d2;
-    --mat-tab-active-hover-label-text-color: #1976d2;
-    --mat-tab-active-ripple-color: #1976d2;
-    --mat-tab-inactive-ripple-color: #1976d2;
-    --mat-tab-active-focus-indicator-color: #1976d2;
-  }
-}
-
-// Shared field styles for search/filter/sort dropdowns
-%tb-iot-hub-field-base {
-  ::ng-deep {
-    .mat-mdc-text-field-wrapper {
-      height: 42px;
-      padding: 0 12px;
-    }
-
-    .mat-mdc-form-field-flex {
-      height: 42px;
-      align-items: center;
-    }
-
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #d5dbe3;
-    }
-
-    .mdc-notched-outline__leading {
-      border-radius: 8px 0 0 8px;
-    }
-
-    .mdc-notched-outline__trailing {
-      border-radius: 0 8px 8px 0;
-    }
-
-    .mat-mdc-form-field-infix {
-      padding-top: 0;
-      padding-bottom: 0;
-      min-height: unset;
-    }
-
-    .mdc-notched-outline__notch {
-      display: none;
-    }
-
-    .mat-mdc-floating-label {
-      display: none;
-    }
-
-    .mat-mdc-form-field-subscript-wrapper {
-      display: none;
-    }
-
-    input.mat-mdc-input-element {
-      font-size: 14px;
-      color: #3e4a59;
-
-      &::placeholder {
-        color: #8b95a2;
-        opacity: 1;
-      }
-    }
-
-    .mat-mdc-select-value-text {
-      font-size: 14px;
-      color: #3e4a59;
-    }
-
-    .mat-mdc-select-arrow-wrapper {
-      padding-left: 4px;
-    }
-
-    .mat-icon {
-      color: #8b95a2;
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
+  ::ng-deep .mat-expansion-panel-body {
+    padding: 0;
   }
 
-  &.mat-focused ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #8b95a2;
-      border-width: 1px;
+  mat-checkbox {
+    display: block;
+    padding: 0 0 0 44px;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.04);
     }
   }
 }
 
-.tb-iot-hub-search-row {
+// Right content area — Design: flex-1, pr-40, scrollable
+.tb-iot-hub-results {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
-  align-items: center;
-
-  .tb-iot-hub-search-field,
-  .tb-iot-hub-sort-field {
-    @extend %tb-iot-hub-field-base;
-  }
-
-  .tb-iot-hub-search-field {
-    flex: 1;
-
-    ::ng-deep {
-      .mat-mdc-form-field-icon-prefix {
-        padding: 0 8px 0 0;
-
-        > .mat-icon {
-          padding: 0;
-        }
-      }
-
-      .mat-mdc-form-field-icon-suffix {
-        padding: 0;
-
-        .mat-mdc-icon-button {
-          width: 32px;
-          height: 32px;
-          padding: 4px;
-        }
-      }
-    }
-  }
-
-  .tb-iot-hub-sort-field {
-    width: 140px;
-    flex-shrink: 0;
-  }
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 40px 0 20px;
 }
 
-.tb-iot-hub-filter-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding-right: 152px;
-
-  .tb-iot-hub-filter-select {
-    @extend %tb-iot-hub-field-base;
-    flex: 1;
-    min-width: 0;
-  }
-}
-
-.tb-iot-hub-active-filters {
+// Top bar: results count + search
+.tb-iot-hub-results-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  padding: 16px 0 0;
+  flex-shrink: 0;
 }
 
-.tb-iot-hub-active-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #eef4ff;
-  color: #305ECA;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 0.15s;
-
-  mat-icon {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background: #dde8fc;
-  }
-}
-
-.tb-iot-hub-clear-filters {
-  border: none;
-  background: none;
-  font-size: 12px;
-  color: #8b95a2;
-  cursor: pointer;
-  padding: 4px 8px;
-  white-space: nowrap;
-
-  &:hover {
-    color: #3e4a59;
-    text-decoration: underline;
-  }
-}
-
+// Results count — Design: 14px Medium, rgba(0,0,0,0.76), tracking 0.25
 .tb-iot-hub-results-count {
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.54);
-  margin-bottom: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+  color: rgba(0, 0, 0, 0.76);
 }
 
+// Search field — Design: 320px, h-40, rounded-8, border rgba(0,0,0,0.12), white bg
+.tb-iot-hub-search-field {
+  width: 320px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: white;
+}
+
+.tb-iot-hub-search-icon {
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+  color: rgba(0, 0, 0, 0.38);
+  flex-shrink: 0;
+}
+
+.tb-iot-hub-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.87);
+  background: transparent;
+  font-family: inherit;
+
+  &::placeholder {
+    color: rgba(0, 0, 0, 0.38);
+  }
+}
+
+.tb-iot-hub-search-clear.mat-mdc-icon-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+  color: rgba(0, 0, 0, 0.38);
+  --mdc-icon-button-state-layer-size: 24px;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Sort row + active filters
+.tb-iot-hub-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tb-iot-hub-sort-spacer {
+  flex: 1;
+}
+
+// Sort button — Design: 14px Medium, primary color, with filter_list icon
+.tb-iot-hub-sort-btn {
+  color: $tb-primary-color;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+// Active filter chips — Design: mat-chip-set, gap-8, chip bg rgba(0,0,0,0.04)
+.tb-iot-hub-active-filters {
+  display: inline;
+
+  .mat-mdc-standard-chip:not(.mdc-evolution-chip--disabled) {
+    --mat-chip-elevated-container-color: rgba(0, 0, 0, 0.04);
+  }
+}
+
+// Clear all button — Design: 14px Regular, rgba(0,0,0,0.54)
+.tb-iot-hub-clear-btn {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.54);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  font-family: inherit;
+
+  &:hover {
+    color: rgba(0, 0, 0, 0.87);
+  }
+}
+
+// Card grid — Design: 4 columns, gap 20px
+.tb-iot-hub-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 8px 0 24px;
+}
+
+// Loading / Empty states
 .tb-iot-hub-loading {
   display: flex;
   justify-content: center;
-  align-items: center;
-  min-height: 200px;
+  padding: 80px 0;
 }
 
 .tb-iot-hub-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 300px;
+  padding: 80px 0;
   text-align: center;
-  color: rgba(0, 0, 0, 0.54);
-
-  .tb-iot-hub-empty-icon {
-    font-size: 64px;
-    width: 64px;
-    height: 64px;
-    margin-bottom: 16px;
-    opacity: 0.4;
-  }
 
   h3 {
-    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 500;
     color: rgba(0, 0, 0, 0.87);
+    margin: 16px 0 8px;
   }
 
   p {
-    margin: 0 0 16px 0;
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.54);
+    margin: 0 0 24px;
   }
 }
 
-.tb-iot-hub-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+.tb-iot-hub-empty-icon {
+  font-size: 48px;
+  width: 48px;
+  height: 48px;
+  color: rgba(0, 0, 0, 0.2);
 }
 
-::ng-deep mat-paginator {
-  .mat-mdc-form-field {
-    .mat-mdc-text-field-wrapper {
-      height: 42px;
-      padding: 0 12px;
-      border: 1px solid #d5dbe3;
-      border-radius: 8px;
-      background: white;
-    }
+// Pagination — Design: centered page numbers, items per page on the right
+.tb-iot-hub-pagination {
+  display: flex;
+  align-items: center;
+  padding: 24px 0 0;
+  flex-shrink: 0;
+  position: relative;
+}
 
-    .mat-mdc-form-field-flex {
-      height: 42px;
-      align-items: center;
-    }
+// Page buttons — Design: h-40, px-16 py-8, rounded-4, gap-1
+.tb-iot-hub-pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 
-    .mdc-notched-outline {
-      display: none;
-    }
-
-    .mat-mdc-form-field-infix {
-      padding-top: 0;
-      padding-bottom: 0;
-      min-height: unset;
-      border-top: none;
-    }
-
-    .mat-mdc-floating-label {
-      display: none;
-    }
-
-    .mat-mdc-form-field-subscript-wrapper {
-      display: none;
-    }
-
-    .mat-mdc-select-value-text {
-      font-size: 14px;
-      color: #3e4a59;
-    }
-
-    .mat-mdc-select-arrow-wrapper {
-      padding-left: 4px;
-    }
-
-    &.mat-focused .mat-mdc-text-field-wrapper {
-      border-color: #8b95a2;
-    }
+  .mat-mdc-icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    --mdc-icon-button-state-layer-size: 40px;
   }
 }
 
-.tb-iot-hub-browse-footer {
-  text-align: center;
-  padding: 24px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  margin-top: 16px;
+.tb-iot-hub-page-btn {
+  height: 40px;
+  min-width: 40px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.76);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
 
-  .tb-iot-hub-become-creator {
-    color: rgba(0, 0, 0, 0.38);
-    font-size: 13px;
-    text-decoration: none;
+  &:hover:not(.active) {
+    background: rgba(0, 0, 0, 0.04);
+  }
 
-    &:hover {
-      color: rgba(0, 0, 0, 0.54);
-      text-decoration: underline;
-    }
+  &.active {
+    background: $tb-primary-color;
+    color: white;
+  }
+}
+
+// Items per page — Design: gap-8, 14px Regular, right-aligned
+.tb-iot-hub-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0.2px;
+  color: rgba(0, 0, 0, 0.76);
+  margin-left: auto;
+}
+
+// Page size dropdown — Design: 77×40, border rgba(0,0,0,0.12), rounded-4, px-12 py-6
+.tb-iot-hub-page-size-select {
+  width: 77px;
+  height: 40px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  padding: 6px 12px;
+
+  ::ng-deep .mat-mdc-select-trigger {
+    font-size: 14px;
+  }
+}
+
+// Responsive
+@media (max-width: 1200px) {
+  .tb-iot-hub-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .tb-iot-hub-filters {
+    width: 240px;
+  }
+
+  .tb-iot-hub-card-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

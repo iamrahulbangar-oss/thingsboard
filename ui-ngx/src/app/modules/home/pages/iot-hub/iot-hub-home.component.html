@@ -16,6 +16,14 @@
 
 -->
 <div class="tb-iot-hub-home">
+  <!-- Installed Items button -->
+  @if (installedItemsCount > 0) {
+    <button mat-stroked-button color="primary" class="tb-iot-hub-installed-btn" (click)="navigateToInstalledItems()">
+      <mat-icon>inventory_2</mat-icon>
+      {{ 'iot-hub.installed-items' | translate }}: {{ installedItemsCount }}
+    </button>
+  }
+
   <!-- Hero section -->
   <div class="tb-iot-hub-hero">
     <!-- Background gradient overlay -->
@@ -89,6 +97,7 @@
               (cardClick)="openItemDetail($event)"
               (creatorClick)="navigateToCreator($event)"
               (installClick)="installItem($event)"
+              (updateClick)="updateItem($event)"
               (deleteClick)="deleteInstalledItem($event)">
             </tb-iot-hub-item-card>
           }
@@ -135,6 +144,7 @@
               (cardClick)="openItemDetail($event)"
               (creatorClick)="navigateToCreator($event)"
               (installClick)="installItem($event)"
+              (updateClick)="updateItem($event)"
               (deleteClick)="deleteInstalledItem($event)">
             </tb-iot-hub-item-card>
           }

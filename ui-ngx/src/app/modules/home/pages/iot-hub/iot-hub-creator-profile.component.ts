@@ -56,6 +56,10 @@ export class TbIotHubCreatorProfileComponent implements OnInit, OnDestroy {
     return this.creator?.avatarUrl ? this.iotHubApiService.resolveResourceUrl(this.creator.avatarUrl) : null;
   }
 
+  getWebsiteLabel(): string {
+    return this.creator?.website?.replace(/^https?:\/\//, '') || '';
+  }
+
   goBack(): void {
     this.router.navigate(['/iot-hub']);
   }

@@ -58,6 +58,11 @@ class JpaIotHubInstalledItemDao extends JpaAbstractDao<IotHubInstalledItemEntity
     }
 
     @Override
+    public long countByTenantId(TenantId tenantId, String itemType) {
+        return repository.countByTenantId(tenantId.getId(), itemType);
+    }
+
+    @Override
     public void deleteByTenantId(TenantId tenantId) {
         repository.deleteByTenantId(tenantId.getId());
     }

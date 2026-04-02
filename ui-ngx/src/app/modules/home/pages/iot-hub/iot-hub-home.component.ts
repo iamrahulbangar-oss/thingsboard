@@ -26,6 +26,7 @@ import { IotHubInstalledItem } from '@shared/models/iot-hub/iot-hub-installed-it
 import { IotHubApiService } from '@core/http/iot-hub-api.service';
 import { TbIotHubItemDetailDialogComponent, IotHubItemDetailDialogData } from './iot-hub-item-detail-dialog.component';
 import { TbIotHubInstallDialogComponent, IotHubInstallDialogData } from './iot-hub-install-dialog.component';
+import { TbIotHubUpdateDialogComponent, IotHubUpdateDialogData } from './iot-hub-update-dialog.component';
 import { TbIotHubDeleteDialogComponent, IotHubDeleteDialogData } from './iot-hub-delete-dialog.component';
 import { TbDeviceInstallDialogComponent, DeviceInstallDialogData } from './device-install-dialog/device-install-dialog.component';
 
@@ -70,19 +71,23 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
     },
     {
       type: ItemType.SOLUTION_TEMPLATE, labelKey: 'item.type-solution-template-plural', color: '#2666a9',
-      gradientColor: 'rgba(38, 102, 169, 0.1)', icons: []
+      gradientColor: 'rgba(38, 102, 169, 0.1)',
+      icons: ['assets/iot-hub/hero-solution-template-icon-1.svg', 'assets/iot-hub/hero-solution-template-icon-2.svg', 'assets/iot-hub/hero-solution-template-icon-3.svg', 'assets/iot-hub/hero-solution-template-icon-4.svg']
     },
     {
       type: ItemType.CALCULATED_FIELD, labelKey: 'item.type-calculated-field-plural', color: '#006d92',
-      gradientColor: 'rgba(0, 109, 146, 0.1)', icons: []
+      gradientColor: 'rgba(0, 109, 146, 0.1)',
+      icons: ['assets/iot-hub/hero-calculated-field-icon-1.svg', 'assets/iot-hub/hero-calculated-field-icon-2.svg', 'assets/iot-hub/hero-calculated-field-icon-3.svg', 'assets/iot-hub/hero-calculated-field-icon-4.svg']
     },
     {
       type: ItemType.RULE_CHAIN, labelKey: 'item.type-rule-chain-plural', color: '#95694b',
-      gradientColor: 'rgba(149, 105, 75, 0.1)', icons: []
+      gradientColor: 'rgba(149, 105, 75, 0.1)',
+      icons: ['assets/iot-hub/hero-rule-chain-icon-1.svg', 'assets/iot-hub/hero-rule-chain-icon-2.svg', 'assets/iot-hub/hero-rule-chain-icon-3.svg', 'assets/iot-hub/hero-rule-chain-icon-4.svg']
     },
     {
       type: ItemType.DEVICE, labelKey: 'iot-hub.and-devices', color: '#4b8a79',
-      gradientColor: 'rgba(75, 138, 121, 0.1)', icons: []
+      gradientColor: 'rgba(75, 138, 121, 0.1)',
+      icons: ['assets/iot-hub/hero-device-icon-1.svg', 'assets/iot-hub/hero-device-icon-2.svg', 'assets/iot-hub/hero-device-icon-3.svg', 'assets/iot-hub/hero-device-icon-4.svg']
     }
   ];
 
@@ -107,6 +112,7 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
 
   installedWidgets: IotHubInstalledItem[] = [];
   installedSolutionTemplates: IotHubInstalledItem[] = [];
+  installedItemsCount = 0;
 
   isLoading = true;
 
@@ -155,12 +161,25 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
 
   onSearch(): void {
     if (this.searchText?.trim()) {
-      this.router.navigate(['/iot-hub/browse'], { queryParams: { search: this.searchText.trim() } });
+      this.router.navigate(['/iot-hub', this.getTypeRoute(this.activeHeroType?.type || ItemType.WIDGET)],
+        { queryParams: { search: this.searchText.trim() } });
     }
   }
 
   navigateToBrowse(type: ItemType): void {
-    this.router.navigate(['/iot-hub/browse'], { queryParams: { type } });
+    this.router.navigate(['/iot-hub', this.getTypeRoute(type)]);
+  }
+
+  private getTypeRoute(type: ItemType): string {
+    switch (type) {
+      case ItemType.WIDGET: return 'widgets';
+      case ItemType.DASHBOARD: return 'dashboards';
+      case ItemType.SOLUTION_TEMPLATE: return 'solution-templates';
+      case ItemType.CALCULATED_FIELD: return 'calculated-fields';
+      case ItemType.RULE_CHAIN: return 'rule-chains';
+      case ItemType.DEVICE: return 'devices';
+      default: return 'widgets';
+    }
   }
 
   navigateToInstalledItems(): void {
@@ -188,6 +207,9 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
   private reloadInstalledItems(type: ItemType): void {
     const config = { ignoreLoading: true };
     const pageLink = new PageLink(10000, 0);
+    this.iotHubApiService.getInstalledItemsCount(null, config).subscribe(count => {
+      this.installedItemsCount = count;
+    });
     if (type === ItemType.WIDGET) {
       this.iotHubApiService.getInstalledItems(pageLink, ItemType.WIDGET, config).subscribe(data => {
         this.installedWidgets = data.data;
@@ -249,6 +271,30 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
     });
   }
 
+  updateItem(item: MpItemVersionView): void {
+    const installedItem = this.findInstalledItem(item);
+    if (!installedItem) {
+      return;
+    }
+    const dialogRef = this.dialog.open(TbIotHubUpdateDialogComponent, {
+      panelClass: ['tb-dialog'],
+      autoFocus: false,
+      data: {
+        installedItemId: installedItem.id.id,
+        itemName: item.name,
+        itemType: item.type,
+        version: item.version,
+        versionId: item.id,
+        iotHubApiService: this.iotHubApiService
+      } as IotHubUpdateDialogData
+    });
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === 'updated') {
+        this.reloadInstalledItems(item.type);
+      }
+    });
+  }
+
   navigateToCreator(creatorId: string): void {
     this.router.navigate(['/iot-hub/creator', creatorId]);
   }
@@ -274,6 +320,7 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
         this.iotHubApiService.deleteInstalledItem(installedItem.id.id).subscribe(() => {
+          this.installedItemsCount = Math.max(0, this.installedItemsCount - 1);
           if (item.type === ItemType.WIDGET) {
             this.installedWidgets = this.installedWidgets.filter(i => i.id.id !== installedItem.id.id);
           } else if (item.type === ItemType.SOLUTION_TEMPLATE) {
@@ -305,7 +352,8 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
       calcFields: this.iotHubApiService.getPublishedVersions(buildQuery(ItemType.CALCULATED_FIELD, 6), config),
       ruleChains: this.iotHubApiService.getPublishedVersions(buildQuery(ItemType.RULE_CHAIN, 6), config),
       installedWidgets: this.iotHubApiService.getInstalledItems(installedPageLink, ItemType.WIDGET, config),
-      installedSolutionTemplates: this.iotHubApiService.getInstalledItems(installedPageLink, ItemType.SOLUTION_TEMPLATE, config)
+      installedSolutionTemplates: this.iotHubApiService.getInstalledItems(installedPageLink, ItemType.SOLUTION_TEMPLATE, config),
+      installedCount: this.iotHubApiService.getInstalledItemsCount(null, config)
     }).subscribe({
       next: (results) => {
         this.popularWidgets = results.widgets.data;
@@ -315,6 +363,7 @@ export class TbIotHubHomeComponent implements OnInit, OnDestroy {
         this.popularRuleChains = results.ruleChains.data;
         this.installedWidgets = results.installedWidgets.data;
         this.installedSolutionTemplates = results.installedSolutionTemplates.data;
+        this.installedItemsCount = results.installedCount;
         this.isLoading = false;
       },
       error: () => {

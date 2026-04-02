@@ -100,6 +100,13 @@ public class IotHubController extends BaseController {
     }
 
     @PreAuthorize("hasAuthority('TENANT_ADMIN')")
+    @GetMapping("/installedItems/count")
+    @ResponseBody
+    public long getInstalledItemsCount(@RequestParam(required = false) String itemType) throws ThingsboardException {
+        return iotHubInstalledItemService.countByTenantId(getTenantId(), itemType);
+    }
+
+    @PreAuthorize("hasAuthority('TENANT_ADMIN')")
     @GetMapping("/installedItems/itemIds")
     @ResponseBody
     public List<UUID> getInstalledItemIds() throws ThingsboardException {

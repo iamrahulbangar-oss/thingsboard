@@ -22,6 +22,9 @@
       <tb-icon>{{ getPlaceholderIcon() }}</tb-icon>
     </div>
     <div class="tb-iot-hub-compact-content">
+      @if (showSubtype && getSubtypeLabel(); as subtypeLabel) {
+        <span class="tb-iot-hub-card-subtype">{{ subtypeLabel }}</span>
+      }
       <h3 class="tb-iot-hub-compact-name">{{ item.name }}</h3>
       <div class="tb-iot-hub-compact-meta">
         <tb-icon class="tb-iot-hub-compact-author-icon">person</tb-icon>
@@ -54,6 +57,9 @@
       }
     </div>
     <div class="tb-iot-hub-card-content">
+      @if (showSubtype && getSubtypeLabel(); as subtypeLabel) {
+        <span class="tb-iot-hub-card-subtype">{{ subtypeLabel }}</span>
+      }
       <h3 class="tb-iot-hub-card-name">{{ item.name }}</h3>
       <div class="tb-iot-hub-card-footer">
         <tb-icon class="tb-iot-hub-card-author-icon">person</tb-icon>

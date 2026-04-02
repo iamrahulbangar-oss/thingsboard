@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@import "../../../../../scss/constants";
+
 // Outer page — 16px padding around the white container
 :host {
   display: block;
@@ -43,9 +45,23 @@
     z-index: 0;
   }
 
-  > * {
+  > *:not(.tb-iot-hub-installed-btn) {
     position: relative;
     z-index: 1;
+  }
+}
+
+// Installed Items button — Design: top-right, white bg, primary border, card shadow
+.tb-iot-hub-installed-btn {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+  background: white;
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.08), 0 4px 8px 0 rgba(0, 0, 0, 0.08);
+
+  &.mat-primary {
+    --mat-button-outlined-outline-color: #{$tb-primary-color};
   }
 }
 

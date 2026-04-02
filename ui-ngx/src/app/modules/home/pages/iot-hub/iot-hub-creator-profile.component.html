@@ -15,64 +15,67 @@
     limitations under the License.
 
 -->
-<div class="tb-iot-hub-creator-profile-container">
-  <button mat-button class="tb-iot-hub-back-btn" (click)="goBack()">
-    <mat-icon>arrow_back</mat-icon>
+<div class="tb-iot-hub-creator-page">
+  <!-- Back link -->
+  <button mat-button color="primary" class="tb-iot-hub-back-btn" (click)="goBack()">
+    <mat-icon>chevron_left</mat-icon>
     {{ 'iot-hub.back-to-iot-hub' | translate }}
   </button>
 
   @if (creator) {
-    <!-- Creator header -->
-    <mat-card class="tb-iot-hub-creator-header" appearance="outlined">
-      <mat-card-content>
-        <div class="tb-iot-hub-creator-info">
-          <div class="tb-iot-hub-creator-avatar">
-            @if (getAvatarUrl(); as avatarUrl) {
-              <img [src]="avatarUrl" alt="">
-            } @else {
-              <mat-icon>account_circle</mat-icon>
-            }
-          </div>
-          <div class="tb-iot-hub-creator-details">
-            <h2>{{ creator.displayName }}</h2>
-            @if (creator.description) {
-              <p class="tb-iot-hub-creator-desc">{{ creator.description }}</p>
-            }
-            @if (creator.website) {
-              <a class="tb-iot-hub-creator-link" [href]="creator.website" target="_blank">
-                {{ creator.website }}
-              </a>
-            }
-            @if (creator.contactEmail) {
-              <div class="tb-iot-hub-creator-email">{{ creator.contactEmail }}</div>
-            }
-            <div class="tb-iot-hub-social-links">
-              @if (creator.githubUrl) {
-                <a [href]="creator.githubUrl" target="_blank" mat-icon-button matTooltip="GitHub">
-                  <mat-icon>code</mat-icon>
-                </a>
-              }
-              @if (creator.linkedinUrl) {
-                <a [href]="creator.linkedinUrl" target="_blank" mat-icon-button matTooltip="LinkedIn">
-                  <mat-icon>work</mat-icon>
-                </a>
-              }
-              @if (creator.twitterUrl) {
-                <a [href]="creator.twitterUrl" target="_blank" mat-icon-button matTooltip="Twitter/X">
-                  <mat-icon>chat</mat-icon>
-                </a>
-              }
-            </div>
-          </div>
+    <!-- Creator profile -->
+    <div class="tb-iot-hub-creator-profile">
+      <div class="tb-iot-hub-creator-header">
+        <div class="tb-iot-hub-creator-avatar">
+          @if (getAvatarUrl(); as avatarUrl) {
+            <img [src]="avatarUrl" alt="">
+          } @else {
+            <mat-icon>person</mat-icon>
+          }
         </div>
-      </mat-card-content>
-    </mat-card>
+        <div class="tb-iot-hub-creator-name-block">
+          <h2 class="tb-iot-hub-creator-name">{{ creator.displayName }}</h2>
+          @if (creator.contactEmail) {
+            <span class="tb-iot-hub-creator-email">{{ creator.contactEmail }}</span>
+          }
+        </div>
+      </div>
 
-    <!-- Published items -->
-    <div class="tb-iot-hub-creator-items-header">
-      <h3>{{ 'iot-hub.published-items' | translate }} ({{ creator.publishedCount }})</h3>
+      @if (creator.description) {
+        <p class="tb-iot-hub-creator-desc">{{ creator.description }}</p>
+      }
+
+      <div class="tb-iot-hub-creator-links">
+        @if (creator.website) {
+          <a mat-stroked-button color="primary" [href]="creator.website" target="_blank" class="tb-iot-hub-creator-website">
+            <mat-icon>language</mat-icon>
+            {{ getWebsiteLabel() }}
+          </a>
+        }
+        @if (creator.githubUrl) {
+          <a [href]="creator.githubUrl" target="_blank" mat-icon-button>
+            <mat-icon svgIcon="mdi:github"></mat-icon>
+          </a>
+        }
+        @if (creator.linkedinUrl) {
+          <a [href]="creator.linkedinUrl" target="_blank" mat-icon-button>
+            <mat-icon svgIcon="mdi:linkedin"></mat-icon>
+          </a>
+        }
+        @if (creator.twitterUrl) {
+          <a [href]="creator.twitterUrl" target="_blank" mat-icon-button>
+            <mat-icon svgIcon="mdi:twitter"></mat-icon>
+          </a>
+        }
+      </div>
     </div>
 
+    <!-- Published items heading -->
+    <h3 class="tb-iot-hub-published-heading">
+      {{ 'iot-hub.published-items' | translate }} ({{ creator.publishedCount }})
+    </h3>
+
+    <!-- Embedded browse -->
     <tb-iot-hub-browse
       #browseComponent
       [creatorId]="creatorId"

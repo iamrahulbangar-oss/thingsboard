@@ -162,6 +162,14 @@ export class IotHubApiService {
     );
   }
 
+  public getInstalledItemsCount(itemType?: string, config?: IotHubRequestConfig): Observable<number> {
+    let url = '/api/iot-hub/installedItems/count';
+    if (itemType) {
+      url += `?itemType=${itemType}`;
+    }
+    return this.http.get<number>(url, { params: this.buildParams(config) });
+  }
+
   public deleteInstalledItem(installedItemId: string, config?: IotHubRequestConfig): Observable<void> {
     return this.http.delete<void>(
       `/api/iot-hub/installedItems/${installedItemId}`,

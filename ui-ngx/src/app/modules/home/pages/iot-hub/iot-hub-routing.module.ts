@@ -19,7 +19,7 @@ import { RouterModule, Routes } from '@angular/router';
 
 import { Authority } from '@shared/models/authority.enum';
 import { TbIotHubHomeComponent } from './iot-hub-home.component';
-import { TbIotHubBrowseComponent } from './iot-hub-browse.component';
+import { TbIotHubItemsPageComponent } from './iot-hub-items-page.component';
 import { TbIotHubCreatorProfileComponent } from './iot-hub-creator-profile.component';
 import { TbIotHubInstalledItemsComponent } from './iot-hub-installed-items.component';
 
@@ -43,15 +43,63 @@ const routes: Routes = [
         }
       },
       {
-        path: 'browse',
-        component: TbIotHubBrowseComponent,
+        path: 'widgets',
+        component: TbIotHubItemsPageComponent,
         data: {
           auth: [Authority.TENANT_ADMIN],
-          title: 'iot-hub.browse',
-          breadcrumb: {
-            label: 'iot-hub.browse',
-            icon: 'search'
-          }
+          title: 'item.type-widget-plural',
+          itemType: 'WIDGET',
+          breadcrumb: { label: 'item.type-widget-plural', icon: 'widgets' }
+        }
+      },
+      {
+        path: 'dashboards',
+        component: TbIotHubItemsPageComponent,
+        data: {
+          auth: [Authority.TENANT_ADMIN],
+          title: 'item.type-dashboard-plural',
+          itemType: 'DASHBOARD',
+          breadcrumb: { label: 'item.type-dashboard-plural', icon: 'dashboard' }
+        }
+      },
+      {
+        path: 'solution-templates',
+        component: TbIotHubItemsPageComponent,
+        data: {
+          auth: [Authority.TENANT_ADMIN],
+          title: 'item.type-solution-template-plural',
+          itemType: 'SOLUTION_TEMPLATE',
+          breadcrumb: { label: 'item.type-solution-template-plural', icon: 'integration_instructions' }
+        }
+      },
+      {
+        path: 'calculated-fields',
+        component: TbIotHubItemsPageComponent,
+        data: {
+          auth: [Authority.TENANT_ADMIN],
+          title: 'item.type-calculated-field-plural',
+          itemType: 'CALCULATED_FIELD',
+          breadcrumb: { label: 'item.type-calculated-field-plural', icon: 'functions' }
+        }
+      },
+      {
+        path: 'rule-chains',
+        component: TbIotHubItemsPageComponent,
+        data: {
+          auth: [Authority.TENANT_ADMIN],
+          title: 'item.type-rule-chain-plural',
+          itemType: 'RULE_CHAIN',
+          breadcrumb: { label: 'item.type-rule-chain-plural', icon: 'account_tree' }
+        }
+      },
+      {
+        path: 'devices',
+        component: TbIotHubItemsPageComponent,
+        data: {
+          auth: [Authority.TENANT_ADMIN],
+          title: 'iot-hub.device-library',
+          itemType: 'DEVICE',
+          breadcrumb: { label: 'iot-hub.device-library', icon: 'memory' }
         }
       },
       {

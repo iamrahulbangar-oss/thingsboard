@@ -34,6 +34,8 @@ public interface IotHubInstalledItemService {
 
     List<UUID> findInstalledItemIdsByTenantId(TenantId tenantId);
 
+    long countByTenantId(TenantId tenantId, String itemType);
+
     void deleteById(TenantId tenantId, IotHubInstalledItemId id);
 
     void deleteByTenantId(TenantId tenantId);

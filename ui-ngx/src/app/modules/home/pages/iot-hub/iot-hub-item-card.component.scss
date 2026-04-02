@@ -205,6 +205,16 @@
   text-transform: uppercase;
 }
 
+// Subtype label — Design: 12px Medium uppercase, rgba(0,0,0,0.54), tracking 0.25
+.tb-iot-hub-card-subtype {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.54);
+}
+
 // Name — Design: 16px Medium, line-height 24, tracking 0.25, ellipsis
 .tb-iot-hub-card-name {
   font-size: 16px;

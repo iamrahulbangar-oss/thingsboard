@@ -14,42 +14,41 @@
  * limitations under the License.
  */
 
+@import "../../../../../scss/constants";
+
 :host {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 16px 24px;
-  overflow: auto;
+  display: block;
+  padding: 16px;
 }
 
-.tb-iot-hub-creator-profile-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
+.tb-iot-hub-creator-page {
   background: white;
-  padding: 24px;
-  border-radius: 4px;
-  box-shadow: 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 1px rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 40px 40px 48px;
 }
 
+// Back button
 .tb-iot-hub-back-btn {
-  margin-bottom: 16px;
-}
-
-.tb-iot-hub-creator-header {
   margin-bottom: 24px;
 }
 
-.tb-iot-hub-creator-info {
+// Creator profile section
+.tb-iot-hub-creator-profile {
+  margin-bottom: 32px;
+}
+
+// Header: avatar + name + email
+.tb-iot-hub-creator-header {
   display: flex;
-  gap: 24px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .tb-iot-hub-creator-avatar {
-  width: 80px;
-  height: 80px;
-  min-width: 80px;
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -64,56 +63,81 @@
   }
 
   mat-icon {
-    font-size: 64px;
-    width: 64px;
-    height: 64px;
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
     color: rgba(0, 0, 0, 0.3);
   }
 }
 
-.tb-iot-hub-creator-details {
-  flex: 1;
+.tb-iot-hub-creator-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
-  h2 {
-    margin: 0 0 4px 0;
-    font-size: 22px;
-  }
+.tb-iot-hub-creator-name {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 32px;
+  color: rgba(0, 0, 0, 0.87);
+  margin: 0;
+}
 
-  .tb-iot-hub-creator-desc {
-    margin: 0 0 8px 0;
-    color: rgba(0, 0, 0, 0.6);
-  }
+.tb-iot-hub-creator-email {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.54);
+}
 
-  .tb-iot-hub-creator-link {
-    color: #1976d2;
-    text-decoration: none;
-    font-size: 14px;
-    display: block;
-    margin-bottom: 4px;
+// Description
+.tb-iot-hub-creator-desc {
+  font-size: 14px;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.76);
+  margin: 0 0 16px;
+  max-width: 600px;
+}
 
-    &:hover {
-      text-decoration: underline;
-    }
-  }
+// Links: website button + social icons
+.tb-iot-hub-creator-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 
-  .tb-iot-hub-creator-email {
-    font-size: 14px;
+  .mat-mdc-icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
     color: rgba(0, 0, 0, 0.54);
-    margin-bottom: 8px;
-  }
-
-  .tb-iot-hub-social-links {
-    display: flex;
-    gap: 4px;
+    --mdc-icon-button-state-layer-size: 40px;
+    --mdc-icon-button-icon-color: rgba(0, 0, 0, 0.54);
   }
 }
 
-.tb-iot-hub-creator-items-header {
-  margin-bottom: 16px;
+.tb-iot-hub-creator-website {
+  color: $tb-primary-color;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  height: 40px;
 
-  h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
+  &.mat-primary {
+    --mat-button-outlined-outline-color: #{$tb-primary-color};
   }
+}
+
+// Browse component — stretch to full width and bottom, ignore parent padding
+tb-iot-hub-browse {
+  margin-left: -40px;
+  margin-right: -40px;
+  margin-bottom: 0;
+}
+
+// Published items heading
+.tb-iot-hub-published-heading {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 24px;
+  color: rgba(0, 0, 0, 0.87);
+  margin: 0 0 16px;
 }
