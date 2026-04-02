@@ -14,7 +14,7 @@
 /// limitations under the License.
 ///
 
-import { Component, Inject, OnInit, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, Inject, OnInit, ViewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { UntypedFormControl, UntypedFormGroup, Validators } from '@angular/forms';
 import { MatStepper } from '@angular/material/stepper';
@@ -98,6 +98,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: DeviceInstallDialogData,
     private dialogRef: MatDialogRef<TbDeviceInstallDialogComponent>,
+    private cdr: ChangeDetectorRef,
     private deviceProfileService: DeviceProfileService,
     private deviceService: DeviceService,
     private dashboardService: DashboardService,
@@ -129,6 +130,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       console.error('Failed to parse device package ZIP', e);
     }
     this.loading = false;
+    this.cdr.detectChanges();
   }
 
   // --- Connectivity ---
@@ -357,6 +359,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
       }
       ep.status = 'running';
       ep.errorMessage = null;
+      this.cdr.detectChanges();
       try {
         const startTime = Date.now();
         const output = await this.createEntity(ep.step);
@@ -384,10 +387,12 @@ export class TbDeviceInstallDialogComponent implements OnInit {
             remaining.resolvedName = this.resolveVariables(remaining.step.name);
           }
         }
+        this.cdr.detectChanges();
       } catch (err: any) {
         ep.status = 'error';
         ep.errorMessage = err?.error?.message || err?.message || 'Unknown error';
         ws.progressError = ep.errorMessage;
+        this.cdr.detectChanges();
         return;
       }
     }
@@ -414,6 +419,7 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     if (!this.isLastWizardStep) {
       await this.delay(500);
       this.stepper.next();
+      this.cdr.detectChanges();
       this.onStepActivated();
     }
   }
