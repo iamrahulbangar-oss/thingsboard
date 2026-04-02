@@ -87,6 +87,7 @@ public class TbHttpClient {
     public static final String PROXY_PASSWORD = "tb.proxy.password";
 
     public static final String MAX_IN_MEMORY_BUFFER_SIZE_IN_KB = "tb.http.maxInMemoryBufferSizeInKb";
+    public static final String MAX_PENDING_REQUESTS_ENV = "TB_RE_HTTP_CLIENT_MAX_PENDING_REQUESTS";
 
     private static final long ANOMALY_REPORT_INTERVAL_MS = 60_000;
 
@@ -124,8 +125,8 @@ public class TbHttpClient {
             this.nodeId = nodeId;
             if (config.getMaxParallelRequestsCount() > 0) {
                 semaphore = new Semaphore(config.getMaxParallelRequestsCount());
-                int maxPending = config.getMaxPendingRequests();
-                pendingQueue = maxPending > 0 ? new LinkedBlockingQueue<>(maxPending) : new LinkedBlockingQueue<>();
+                int effectiveMax = getEffectiveMaxPendingRequests();
+                pendingQueue = effectiveMax > 0 ? new LinkedBlockingQueue<>(effectiveMax) : new LinkedBlockingQueue<>();
             }
 
             ConnectionProvider connectionProvider = ConnectionProvider
@@ -184,6 +185,19 @@ public class TbHttpClient {
         } catch (SSLException e) {
             throw new TbNodeException(e);
         }
+    }
+
+    private int getEffectiveMaxPendingRequests() {
+        int userMax = config.getMaxPendingRequests();
+        String envValue = System.getenv(MAX_PENDING_REQUESTS_ENV);
+        if (envValue == null) {
+            return userMax; // 0 = unbounded; no system ceiling configured
+        }
+        int systemMax = Integer.parseInt(envValue);
+        if (userMax <= 0) {
+            return systemMax; // user left it unlimited → apply system ceiling
+        }
+        return Math.min(userMax, systemMax); // honour the lower of the two
     }
 
     private int getPoolMaxConnections() {
@@ -257,8 +271,7 @@ public class TbHttpClient {
         if (semaphore != null) {
             if (!pendingQueue.offer(new PendingTask(ctx, msg, onSuccess, onFailure, System.nanoTime()))) {
                 droppedFullCount.incrementAndGet();
-                log.debug("[{}][{}] REST API call queue full (maxPendingRequests={}), dropping msg {}.",
-                        tenantId, nodeId, config.getMaxPendingRequests(), msg.getId());
+                log.debug("[{}][{}] REST API call queue full, dropping msg {}.", tenantId, nodeId, msg.getId());
                 maybeReportAnomalies();
                 onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
                 return;
@@ -305,12 +318,14 @@ public class TbHttpClient {
             return;
         }
         lastAnomalyReportAt = now;
+        int queueSize = pendingQueue != null ? pendingQueue.size() : 0;
+        int queueRemaining = pendingQueue != null ? pendingQueue.remainingCapacity() : Integer.MAX_VALUE;
         log.warn("[{}][{}] REST API call node anomalies: droppedQueueFull={}, droppedStale={} " +
-                        "(dispatched={}, success={}, failure={}, currentQueueDepth={}).",
+                        "(dispatched={}, success={}, failure={}, queueDepth={}, queueRemaining={}).",
                 tenantId, nodeId,
                 droppedFullCount.get(), droppedStaleCount.get(),
                 dispatchedCount.get(), successCount.get(), failureCount.get(),
-                pendingQueue != null ? pendingQueue.size() : 0);
+                queueSize, queueRemaining);
     }
 
     private void doHttpCall(PendingTask task) {
