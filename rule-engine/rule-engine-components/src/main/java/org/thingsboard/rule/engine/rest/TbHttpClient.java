@@ -92,9 +92,9 @@ public class TbHttpClient {
     private EventLoopGroup eventLoopGroup;
     private WebClient webClient;
     private Semaphore semaphore;
-    private BlockingQueue<PendingRequest> pendingQueue;
+    private BlockingQueue<PendingTask> pendingQueue;
 
-    private record PendingRequest(
+    private record PendingTask(
             TbContext ctx,
             TbMsg msg,
             Consumer<TbMsg> onSuccess,
@@ -225,14 +225,14 @@ public class TbHttpClient {
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
         if (semaphore != null) {
-            if (!pendingQueue.offer(new PendingRequest(ctx, msg, onSuccess, onFailure))) {
+            if (!pendingQueue.offer(new PendingTask(ctx, msg, onSuccess, onFailure))) {
                 onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
                 return;
             }
             tryProcess();
             return;
         }
-        doHttpCall(new PendingRequest(ctx, msg, onSuccess, onFailure));
+        doHttpCall(new PendingTask(ctx, msg, onSuccess, onFailure));
     }
 
     /**
@@ -245,7 +245,7 @@ public class TbHttpClient {
             if (!semaphore.tryAcquire()) {
                 return; // all slots are in use; a callback will call tryProcess() when one frees up
             }
-            PendingRequest next = pendingQueue.poll();
+            PendingTask next = pendingQueue.poll();
             if (next == null) {
                 semaphore.release();
                 return; // queue is empty; slot released
@@ -261,7 +261,7 @@ public class TbHttpClient {
         }
     }
 
-    private void doHttpCall(PendingRequest request) {
+    private void doHttpCall(PendingTask request) {
         try {
             String endpointUrl = TbNodeUtils.processPattern(config.getRestEndpointUrlPattern(), request.msg());
             HttpMethod method = HttpMethod.valueOf(config.getRequestMethod());
