@@ -67,7 +67,7 @@
         </ng-template>
 
         @for (ws of wizardSteps; track ws.label; let i = $index; let last = $last) {
-          <mat-step [editable]="false"
+          <mat-step [editable]="ws.type === 'form'"
                     [completed]="ws.completed"
                     [stepControl]="ws.type === 'form' ? ws.formGroup : null">
             <ng-template matStepLabel>{{ ws.label }}</ng-template>
@@ -216,6 +216,7 @@
           @case ('progress') {
             @if (step.progressError) {
               <button mat-button (click)="cancel()">{{ 'action.cancel' | translate }}</button>
+              <button mat-button (click)="goBackToForm()">{{ 'action.back' | translate }}</button>
               <button mat-flat-button color="primary" (click)="retryEntitySteps(step)">
                 {{ 'action.retry' | translate }}
               </button>

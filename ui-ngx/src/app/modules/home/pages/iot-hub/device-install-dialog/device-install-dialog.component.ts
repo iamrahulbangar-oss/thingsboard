@@ -191,6 +191,27 @@ export class TbDeviceInstallDialogComponent implements OnInit {
     this.runEntitySteps(step);
   }
 
+  goBackToForm(): void {
+    // Find the last form step before the current progress step
+    const currentIdx = this.stepper.selectedIndex;
+    for (let i = currentIdx - 1; i >= 0; i--) {
+      if (this.wizardSteps[i].type === 'form') {
+        // Reset the progress step so it re-runs when we come back
+        const progressStep = this.wizardSteps[currentIdx];
+        progressStep.entitySteps = null;
+        progressStep.progressError = null;
+        progressStep.progressDone = false;
+        progressStep.completed = false;
+        // Allow navigation back by making intermediate steps editable
+        for (let j = i; j < currentIdx; j++) {
+          this.wizardSteps[j].completed = false;
+        }
+        this.stepper.selectedIndex = i;
+        return;
+      }
+    }
+  }
+
   getPatternErrorMessage(field: FormFieldDefinition): string {
     return field.validators?.[0]?.message || 'Invalid format';
   }
@@ -411,16 +432,16 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         if (existing) {
           return existing;
         }
-        const result = await firstValueFrom(this.deviceProfileService.saveDeviceProfile(template));
+        const result = await firstValueFrom(this.deviceProfileService.saveDeviceProfile(template, {ignoreErrors: true}));
         return { id: result.id.id, name: result.name };
       }
       case InstallStepType.DEVICE: {
-        const result = await firstValueFrom(this.deviceService.saveDevice(template));
-        const creds = await firstValueFrom(this.deviceService.getDeviceCredentials(result.id.id));
+        const result = await firstValueFrom(this.deviceService.saveDevice(template, {ignoreErrors: true}));
+        const creds = await firstValueFrom(this.deviceService.getDeviceCredentials(result.id.id, false, {ignoreErrors: true}));
         return { id: result.id.id, name: result.name, token: creds.credentialsId };
       }
       case InstallStepType.DASHBOARD: {
-        const result = await firstValueFrom(this.dashboardService.saveDashboard(template));
+        const result = await firstValueFrom(this.dashboardService.saveDashboard(template, {ignoreErrors: true}));
         return { id: result.id.id, name: result.title };
       }
       case InstallStepType.RULE_CHAIN: {
@@ -430,10 +451,10 @@ export class TbDeviceInstallDialogComponent implements OnInit {
         if (existing) {
           return existing;
         }
-        const saved = await firstValueFrom(this.ruleChainService.saveRuleChain(ruleChain));
+        const saved = await firstValueFrom(this.ruleChainService.saveRuleChain(ruleChain, {ignoreErrors: true}));
         if (metadata) {
           metadata.ruleChainId = saved.id;
-          await firstValueFrom(this.ruleChainService.saveRuleChainMetadata(metadata));
+          await firstValueFrom(this.ruleChainService.saveRuleChainMetadata(metadata, {ignoreErrors: true}));
         }
         return { id: saved.id.id, name: saved.name };
       }
