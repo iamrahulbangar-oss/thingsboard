@@ -58,6 +58,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -87,22 +88,40 @@ public class TbHttpClient {
 
     public static final String MAX_IN_MEMORY_BUFFER_SIZE_IN_KB = "tb.http.maxInMemoryBufferSizeInKb";
 
+    private static final long ANOMALY_REPORT_INTERVAL_MS = 60_000;
+
     private final TbRestApiCallNodeConfiguration config;
+    private final String tenantId;
+    private final String nodeId;
 
     private EventLoopGroup eventLoopGroup;
     private WebClient webClient;
     private Semaphore semaphore;
     private BlockingQueue<PendingTask> pendingQueue;
 
+    private final AtomicLong dispatchedCount   = new AtomicLong();
+    private final AtomicLong successCount      = new AtomicLong();
+    private final AtomicLong failureCount      = new AtomicLong();
+    private final AtomicLong droppedFullCount  = new AtomicLong();
+    private final AtomicLong droppedStaleCount = new AtomicLong();
+    private volatile long lastAnomalyReportAt  = 0;
+
     private record PendingTask(
             TbContext ctx,
             TbMsg msg,
             Consumer<TbMsg> onSuccess,
-            BiConsumer<TbMsg, Throwable> onFailure) {}
+            BiConsumer<TbMsg, Throwable> onFailure,
+            long enqueuedNanos) {}
 
     TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared) throws TbNodeException {
+        this(config, eventLoopGroupShared, "n/a", "n/a");
+    }
+
+    TbHttpClient(TbRestApiCallNodeConfiguration config, EventLoopGroup eventLoopGroupShared, String tenantId, String nodeId) throws TbNodeException {
         try {
             this.config = config;
+            this.tenantId = tenantId;
+            this.nodeId = nodeId;
             if (config.getMaxParallelRequestsCount() > 0) {
                 semaphore = new Semaphore(config.getMaxParallelRequestsCount());
                 int maxPending = config.getMaxPendingRequests();
@@ -219,20 +238,35 @@ public class TbHttpClient {
         if (this.eventLoopGroup != null) {
             this.eventLoopGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS);
         }
+        long full = droppedFullCount.get();
+        long stale = droppedStaleCount.get();
+        if (full > 0 || stale > 0) {
+            log.warn("[{}][{}] REST API call node destroyed with anomalies: " +
+                            "droppedQueueFull={}, droppedStale={}, dispatched={}, success={}, failure={}.",
+                    tenantId, nodeId, full, stale,
+                    dispatchedCount.get(), successCount.get(), failureCount.get());
+        } else {
+            log.debug("[{}][{}] REST API call node destroyed. dispatched={}, success={}, failure={}.",
+                    tenantId, nodeId, dispatchedCount.get(), successCount.get(), failureCount.get());
+        }
     }
 
     public void processMessage(TbContext ctx, TbMsg msg,
                                Consumer<TbMsg> onSuccess,
                                BiConsumer<TbMsg, Throwable> onFailure) {
         if (semaphore != null) {
-            if (!pendingQueue.offer(new PendingTask(ctx, msg, onSuccess, onFailure))) {
+            if (!pendingQueue.offer(new PendingTask(ctx, msg, onSuccess, onFailure, System.nanoTime()))) {
+                droppedFullCount.incrementAndGet();
+                log.debug("[{}][{}] REST API call queue full (maxPendingRequests={}), dropping msg {}.",
+                        tenantId, nodeId, config.getMaxPendingRequests(), msg.getId());
+                maybeReportAnomalies();
                 onFailure.accept(msg, new RuntimeException("Max pending requests limit exceeded!"));
                 return;
             }
             tryProcess();
             return;
         }
-        doHttpCall(new PendingTask(ctx, msg, onSuccess, onFailure));
+        doHttpCall(new PendingTask(ctx, msg, onSuccess, onFailure, 0L));
     }
 
     /**
@@ -252,13 +286,31 @@ public class TbHttpClient {
             }
             if (!next.msg().isValid()) {
                 semaphore.release();
-                log.warn("[{}] Dropping stale message from REST API call queue.", next.msg().getId());
+                droppedStaleCount.incrementAndGet();
+                log.debug("[{}][{}] Dropping stale msg {} from REST API call queue (queueDepth={}).",
+                        tenantId, nodeId, next.msg().getId(), pendingQueue.size());
                 next.onFailure().accept(next.msg(), new RuntimeException("Message is no longer valid. Dropped from queue."));
+                maybeReportAnomalies();
                 continue; // slot released — loop to check if there's a valid next item
             }
+            dispatchedCount.incrementAndGet();
             doHttpCall(next);
             return; // slot is now owned by doHttpCall; its callback will call tryProcess()
         }
+    }
+
+    private void maybeReportAnomalies() {
+        long now = System.currentTimeMillis();
+        if (now - lastAnomalyReportAt < ANOMALY_REPORT_INTERVAL_MS) {
+            return;
+        }
+        lastAnomalyReportAt = now;
+        log.warn("[{}][{}] REST API call node anomalies: droppedQueueFull={}, droppedStale={} " +
+                        "(dispatched={}, success={}, failure={}, currentQueueDepth={}).",
+                tenantId, nodeId,
+                droppedFullCount.get(), droppedStaleCount.get(),
+                dispatchedCount.get(), successCount.get(), failureCount.get(),
+                pendingQueue != null ? pendingQueue.size() : 0);
     }
 
     private void doHttpCall(PendingTask task) {
@@ -283,8 +335,10 @@ public class TbHttpClient {
                     .publishOn(Schedulers.fromExecutor(task.ctx().getExternalCallExecutor()))
                     .subscribe(responseEntity -> {
                         if (responseEntity.getStatusCode().is2xxSuccessful()) {
+                            successCount.incrementAndGet();
                             task.onSuccess().accept(processResponse(task.ctx(), task.msg(), responseEntity));
                         } else {
+                            failureCount.incrementAndGet();
                             task.onFailure().accept(processFailureResponse(task.msg(), responseEntity), null);
                         }
                         if (semaphore != null) {
@@ -292,6 +346,7 @@ public class TbHttpClient {
                             tryProcess();
                         }
                     }, throwable -> {
+                        failureCount.incrementAndGet();
                         task.onFailure().accept(processException(task.msg(), throwable), processThrowable(throwable));
                         if (semaphore != null) {
                             semaphore.release();
@@ -299,6 +354,7 @@ public class TbHttpClient {
                         }
                     });
         } catch (Exception e) {
+            failureCount.incrementAndGet();
             task.onFailure().accept(processException(task.msg(), e), processThrowable(e));
             if (semaphore != null) {
                 semaphore.release();
