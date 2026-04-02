@@ -182,7 +182,7 @@
                           }
                         </div>
                         <div class="tb-progress-info">
-                          <span class="tb-progress-label">{{ ep.resolvedName || ep.step.name }}</span>
+                          <span class="tb-progress-label">{{ ('iot-hub.device-install-step-type-' + ep.step.type | translate) + ' — ' + (ep.resolvedName || ep.step.name) }}</span>
                           @if (ep.status === 'error' && ep.errorMessage) {
                             <span class="tb-progress-error-msg">{{ ep.errorMessage }}</span>
                           }
