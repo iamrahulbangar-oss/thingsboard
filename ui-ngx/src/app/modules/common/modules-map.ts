@@ -16,6 +16,7 @@
 
 import * as AngularAnimations from '@angular/animations';
 import * as AngularCore from '@angular/core';
+import * as AngularCoreRxjsInterop from '@angular/core/rxjs-interop';
 import * as AngularCommon from '@angular/common';
 import * as AngularForms from '@angular/forms';
 import * as AngularPlatformBrowser from '@angular/platform-browser';
@@ -73,7 +74,11 @@ import * as RxJsOperators from 'rxjs/operators';
 import * as TranslateCore from '@ngx-translate/core';
 import * as MatDateTimePicker from '@mat-datetimepicker/core';
 import _moment from 'moment';
+import * as momentTz from 'moment-timezone';
 import * as tslib from 'tslib';
+
+import * as CanvasGauges from 'canvas-gauges';
+import * as NgxHmCarousel from 'ngx-hm-carousel';
 
 import * as TbCore from '@core/public-api';
 import * as TbShared from '@shared/public-api';
@@ -351,6 +356,7 @@ class ModulesMap implements IModulesMap {
   private modulesMap: {[key: string]: any} = {
     '@angular/animations': AngularAnimations,
     '@angular/core': this.angularCoreModule20to18Patch(AngularCore),
+    '@angular/core/rxjs-interop': AngularCoreRxjsInterop,
     '@angular/common': AngularCommon,
     '@angular/common/http': HttpClientModule,
     '@angular/forms': AngularForms,
@@ -407,7 +413,11 @@ class ModulesMap implements IModulesMap {
     '@ngx-translate/core': this.translateModule20to18Patch(TranslateCore),
     '@mat-datetimepicker/core': MatDateTimePicker,
     moment: _moment,
+    'moment-timezone': momentTz,
     tslib,
+
+    'canvas-gauges': CanvasGauges,
+    'ngx-hm-carousel': NgxHmCarousel,
 
     '@core/public-api': TbCore,
     '@shared/public-api': TbShared,
