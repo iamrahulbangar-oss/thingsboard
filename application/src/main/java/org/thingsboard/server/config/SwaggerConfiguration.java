@@ -119,6 +119,8 @@ public class SwaggerConfiguration {
     // Keyed by the schema name that swagger-core generates (see resolveSchemaName).
     private final Map<String, List<String>> schemaPropertyOrders = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> schemaOwnProps = new ConcurrentHashMap<>();
+    // Tracks schema name → fully-qualified class names to detect collisions.
+    private final Map<String, Set<String>> schemaNameToClasses = new ConcurrentHashMap<>();
 
     @Value("${swagger.api_path:/api/**}")
     private String apiPath;
@@ -343,6 +345,10 @@ public class SwaggerConfiguration {
                         try {
                             var beanDesc = Json.mapper().getSerializationConfig().introspect(javaType);
                             String schemaName = resolveSchemaName(javaType);
+                            Set<String> classes = schemaNameToClasses.computeIfAbsent(schemaName, k -> ConcurrentHashMap.newKeySet());
+                            if (classes.add(cls.getName()) && classes.size() > 1) {
+                                log.error("Duplicate OpenAPI schema name '{}' mapped by: {}. Use @Schema(name = ...) to disambiguate.", schemaName, classes);
+                            }
                             schemaPropertyOrders.put(schemaName, resolvePropertyOrder(cls, beanDesc));
                             Set<String> ownProps = computeOwnPropNames(cls, beanDesc);
                             if (!ownProps.isEmpty()) {
@@ -390,6 +396,19 @@ public class SwaggerConfiguration {
         var apiKeyRequirement = createSecurityRequirement(API_KEY_SCHEME);
 
         return openAPI -> {
+            // Fail fast on duplicate schema names — two different classes resolving to the same
+            // OpenAPI schema name causes one to silently overwrite the other.
+            List<String> duplicates = schemaNameToClasses.entrySet().stream()
+                    .filter(e -> e.getValue().size() > 1)
+                    .map(e -> "'" + e.getKey() + "' mapped by: " + e.getValue())
+                    .sorted()
+                    .toList();
+            if (!duplicates.isEmpty()) {
+                throw new IllegalStateException(
+                        "Duplicate OpenAPI schema names detected. Use @Schema(name = ...) to disambiguate:\n  "
+                                + String.join("\n  ", duplicates));
+            }
+
             var paths = openAPI.getPaths();
             paths.entrySet().stream()
                     .peek(entry -> {
@@ -885,7 +904,13 @@ public class SwaggerConfiguration {
      * This matches the naming convention used by swagger-core's {@code TypeNameResolver}.
      */
     private static String resolveSchemaName(JavaType javaType) {
-        StringBuilder sb = new StringBuilder(javaType.getRawClass().getSimpleName());
+        Class<?> cls = javaType.getRawClass();
+        io.swagger.v3.oas.annotations.media.Schema schemaAnnotation =
+                cls.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        if (schemaAnnotation != null && !schemaAnnotation.name().isEmpty()) {
+            return schemaAnnotation.name();
+        }
+        StringBuilder sb = new StringBuilder(cls.getSimpleName());
         if (javaType.hasGenericTypes()) {
             for (int i = 0; i < javaType.containedTypeCount(); i++) {
                 JavaType param = javaType.containedType(i);
@@ -990,8 +1015,14 @@ public class SwaggerConfiguration {
         // Map backing field names to their JSON property names (respects @JsonProperty)
         Map<String, String> fieldToJsonName = new LinkedHashMap<>();
         for (var prop : beanDesc.findProperties()) {
-            if (prop.getField() != null && prop.couldSerialize()) {
-                fieldToJsonName.put(prop.getField().getName(), prop.getName());
+            if (prop.couldSerialize()) {
+                if (prop.getField() != null) {
+                    fieldToJsonName.put(prop.getField().getName(), prop.getName());
+                } else {
+                    // For transient fields, Jackson may not associate the field with the property.
+                    // Fall back to using the property name as the field name key.
+                    fieldToJsonName.putIfAbsent(prop.getName(), prop.getName());
+                }
             }
         }
 

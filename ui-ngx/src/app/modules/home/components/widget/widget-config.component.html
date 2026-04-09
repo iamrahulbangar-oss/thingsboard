@@ -298,7 +298,7 @@
     @if (widgetType === widgetTypes.rpc &&
       modelValue?.isDataEnabled) {
       <ng-container [formGroup]="targetDeviceSettings">
-        <tb-target-device formControlName="targetDevice">
+        <tb-target-device formControlName="targetDevice" appearance="outline">
         </tb-target-device>
       </ng-container>
     }
