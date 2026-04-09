@@ -27,6 +27,11 @@ import org.thingsboard.server.dao.service.DaoSqlTest;
 @DaoSqlTest
 public class MqttV5ClientSparkplugBConnectionDevicesCreatingBeforeTest extends AbstractMqttV5ClientSparkplugConnectionTest {
 
+    /**
+     * String deviceName_1 = deviceId + "_1"; Only name device. Without a complete topic: how it was in the old version.
+     * String deviceName_2 = groupId + DEVICE_NAME_SPLIT_REGEXP + edgeNode + DEVICE_NAME_SPLIT_REGEXP + deviceId + "_2"; With complete topic: how it was in the new version.
+     * @throws Exception
+     */
     @Before
     public void beforeTest() throws Exception {
         beforeSparkplugTest(true);

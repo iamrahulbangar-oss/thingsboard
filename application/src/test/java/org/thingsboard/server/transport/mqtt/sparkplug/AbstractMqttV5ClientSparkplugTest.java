@@ -234,18 +234,18 @@ public abstract class AbstractMqttV5ClientSparkplugTest extends AbstractMqttInte
         valueDeviceInt32 = 4024;
         metric = createMetric(valueDeviceInt32, ts, metricBirthName_Int32, metricBirthDataType_Int32, -1L);
         // as old device name -> deviceId
-        String deviceiDName1 = deviceId + "_1";
+        String deviceIdNameLabel1 = deviceId + "_1";
 
         if (client.isConnected()) {
             SparkplugBProto.Payload.Builder payloadBirthDevice1 = SparkplugBProto.Payload.newBuilder()
                     .setTimestamp(ts)
                     .setSeq(getSeqNum());
             payloadBirthDevice1.addMetrics(metric);
-            client.publish(TOPIC_ROOT_SPB_V_1_0 + TOPIC_SPLIT_REGEXP + groupId + TOPIC_SPLIT_REGEXP + SparkplugMessageType.DBIRTH.name() + TOPIC_SPLIT_REGEXP + edgeNode + TOPIC_SPLIT_REGEXP + deviceiDName1,
+            client.publish(TOPIC_ROOT_SPB_V_1_0 + TOPIC_SPLIT_REGEXP + groupId + TOPIC_SPLIT_REGEXP + SparkplugMessageType.DBIRTH.name() + TOPIC_SPLIT_REGEXP + edgeNode + TOPIC_SPLIT_REGEXP + deviceIdNameLabel1,
                     payloadBirthDevice1.build().toByteArray(), 0, false);
 
         }
-        String deviceName1 = groupId + DEVICE_NAME_SPLIT_REGEXP + edgeNode + DEVICE_NAME_SPLIT_REGEXP + deviceiDName1;;
+        String deviceName1 = groupId + DEVICE_NAME_SPLIT_REGEXP + edgeNode + DEVICE_NAME_SPLIT_REGEXP + deviceIdNameLabel1;;
         AtomicReference<Device> device1 = new AtomicReference<>();
         await(alias + "find device [" + deviceName1 + "] before connecting")
                 .atMost(200, TimeUnit.SECONDS)
@@ -256,16 +256,16 @@ public abstract class AbstractMqttV5ClientSparkplugTest extends AbstractMqttInte
         devices.add(device1.get());
 
         // as new device name ->  groupId +  ":" + edgeNode +  ":" + deviceId;
-        String deviceiDName2 = deviceId + "_2";
+        String deviceIdName2 = deviceId + "_2";
         if (client.isConnected()) {
             SparkplugBProto.Payload.Builder payloadBirthDevice2 = SparkplugBProto.Payload.newBuilder()
                     .setTimestamp(ts)
                     .setSeq(getSeqNum());
             payloadBirthDevice2.addMetrics(metric);
-            client.publish(TOPIC_ROOT_SPB_V_1_0 + TOPIC_SPLIT_REGEXP + groupId + TOPIC_SPLIT_REGEXP + SparkplugMessageType.DBIRTH.name() + TOPIC_SPLIT_REGEXP + edgeNode + TOPIC_SPLIT_REGEXP + deviceiDName2,
+            client.publish(TOPIC_ROOT_SPB_V_1_0 + TOPIC_SPLIT_REGEXP + groupId + TOPIC_SPLIT_REGEXP + SparkplugMessageType.DBIRTH.name() + TOPIC_SPLIT_REGEXP + edgeNode + TOPIC_SPLIT_REGEXP + deviceIdName2,
                     payloadBirthDevice2.build().toByteArray(), 0, false);
         }
-        String deviceName2 = groupId + ":" + edgeNode + ":" + deviceiDName2;
+        String deviceName2 = groupId + DEVICE_NAME_SPLIT_REGEXP + edgeNode + DEVICE_NAME_SPLIT_REGEXP + deviceIdName2;
         AtomicReference<Device> device2 = new AtomicReference<>();
         await(alias + "find device [" + deviceName2 + "] before connecting")
                 .atMost(200, TimeUnit.SECONDS)
@@ -276,6 +276,10 @@ public abstract class AbstractMqttV5ClientSparkplugTest extends AbstractMqttInte
         devices.add(device2.get());
         Assert.assertEquals(cntDevices, devices.size());
         state_ONLINE_ALL (devices, calendar.getTimeInMillis());
+        // Without full topic: as it was in the old version. When deviceId is updated to full theme, Label is also updated to old deviceId
+        Assert.assertEquals(deviceIdNameLabel1, device1.get().getLabel());
+        // // With a full topic: if new. When creating a device by a client to a full topic, if the Label was not filled in - we do not touch it.
+        Assert.assertNull(device2.get().getLabel());
     }
 
     protected void state_ONLINE_ALL (List<Device> devices, long ts) {
@@ -328,7 +332,7 @@ public abstract class AbstractMqttV5ClientSparkplugTest extends AbstractMqttInte
         SparkplugBProto.Payload.Builder payloadBirthDevice = SparkplugBProto.Payload.newBuilder()
                 .setTimestamp(ts)
                 .setSeq(getSeqNum());
-        String deviceIdName = deviceId + "_" + 1;
+        String deviceIdName = deviceId + "_1";
         String deviceName =  groupId +  ":" + edgeNode +  ":" + deviceIdName;
 
         payloadBirthDevice.addMetrics(metric);

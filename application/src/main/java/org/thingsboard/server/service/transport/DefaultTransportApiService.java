@@ -392,6 +392,7 @@ public class DefaultTransportApiService implements TransportApiService {
             return null;
         }
         existingDevice.setName(requestMsg.getDeviceName());
+        existingDevice.setLabel(deviceId);
         return deviceService.saveDevice(existingDevice);
     }
 
@@ -402,6 +403,10 @@ public class DefaultTransportApiService implements TransportApiService {
         Device device = new Device();
         device.setTenantId(tenantId);
         device.setName(requestMsg.getDeviceName());
+        if (requestMsg.getIsSparkplug()){
+            String [] topicDevice = requestMsg.getDeviceName().split(DEVICE_NAME_SPLIT_REGEXP);
+            if (topicDevice.length == 3) device.setLabel(topicDevice[2]);
+        }
         device.setType(requestMsg.getDeviceType());
         device.setCustomerId(gateway.getCustomerId());
         DeviceProfile profile =
